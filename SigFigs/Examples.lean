@@ -9,8 +9,9 @@ import Mathlib.Probability.Distributions.Gaussian.Real
 #check (1.23 : ℝRange)
 #check (1.23ₑₓ : ℝRange)
 #check (1.23 + (Real.sqrt 7 : ℝ) : ℝRange)
-#check (3e10 : ℝ) + (5e10 : ℝRange)
 #check 1.23ᵤ -- u subscript for "uncertain"; `fooᵤ` elaborates the same as `(foo : ℝRange)`.
+#check (3e10 : ℝ) + (5e10 : ℝRange)
+#check 3e10ₑₓ + 5e10ᵤ --same as above
 
 #check 7 ± 1
 --Elaborates as x±2, even though we construct the interval "manually".
