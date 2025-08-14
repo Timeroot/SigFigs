@@ -147,85 +147,77 @@ theorem mul_snd (x y : ℝRange) : (x * y).snd =
     let ⟨⟨xl,xu⟩,_⟩ := x; let ⟨⟨yl,yu⟩,_⟩ := y; max (max (xl*yl) (xu*yl)) (max (xl*yu) (xu*yu)) := by
   rfl
 
-set_option maxHeartbeats 500000 in
-theorem ℝRange.mul_ext.extracted_1_2 (a b : ℝ) (h1 : a ≤ b) (c d : ℝ) (h2 : c ≤ d) :
+private theorem mul_ext_bash {a b c d : ℝ} (h1 : a ≤ b) (h2 : c ≤ d) :
   ∀ (c_1 : ℝ),
     ((a * c ≤ c_1 ∨ b * c ≤ c_1) ∨ a * d ≤ c_1 ∨ b * d ≤ c_1) ∧
         ((c_1 ≤ a * c ∨ c_1 ≤ b * c) ∨ c_1 ≤ a * d ∨ c_1 ≤ b * d) ↔
       ∃ a_1, (a ≤ a_1 ∧ a_1 ≤ b) ∧ ∃ b, (c ≤ b ∧ b ≤ d) ∧ c_1 = a_1 * b := by
   -- To prove the equivalence, we can use the fact that the product of two intervals is the interval spanned by the products of their endpoints.
-  have h_prod : ∀ x ∈ Set.Icc a b, ∀ y ∈ Set.Icc c d, x * y ∈ Set.Icc (min (a * c) (min (a * d) (min (b * c) (b * d)))) (max (a * c) (max (a * d) (max (b * c) (b * d)))) := by
-    aesop;
-    -- Case 1
-    · by_cases ha : a ≤ 0;
-      -- Case 1
-      · by_cases hb : b ≤ 0;
-        -- Case 1
-        · -- Since $a \leq x \leq b$ and $a, b \leq 0$, we have $x \leq 0$. Also, since $c \leq y \leq d$, we consider two cases: $y \geq 0$ and $y < 0$.
-          by_cases hy_nonneg : 0 ≤ y;
-          -- Case 1
-          · exact Or.inr <| Or.inl <| by nlinarith;
-          -- Case 2
-          · exact Or.inr <| Or.inr <| Or.inr <| by nlinarith;
-        -- Case 2
-        · -- Since $a \leq 0$ and $b > 0$, we consider the sign of $x$ and $y$.
-          by_cases hx : x ≤ 0;
-          -- Case 1
-          · by_cases hy : y ≤ 0;
-            -- Case 1
-            · contrapose! hb;
-              nlinarith;
-            -- Case 2
-            · exact Or.inr <| Or.inl <| by nlinarith;
-          -- Case 2
-          · contrapose! hx;
-            cases le_or_lt 0 y <;> nlinarith;
-      -- Case 2
-      · norm_num +zetaDelta at *;
-        contrapose! ha;
-        cases le_or_lt 0 x <;> cases le_or_lt 0 y <;> nlinarith;
-    -- Case 2
+  have h_prod : ∀ x ∈ Set.Icc a b, ∀ y ∈ Set.Icc c d, x * y ∈ Set.Icc
+      (min (a * c) (min (a * d) (min (b * c) (b * d)))) (max (a * c) (max (a * d) (max (b * c) (b * d)))) := by
+    rintro x ⟨hax, hxb⟩ y ⟨hcy, hyd⟩
+    simp only [Set.mem_Icc, inf_le_iff, le_sup_iff]
+    constructor
+    · by_cases hb : b ≤ 0
+      · by_cases hy_nonneg : 0 ≤ y
+        · exact .inr <| .inl <| by nlinarith
+        · exact .inr <| .inr <| .inr <| by nlinarith
+      by_cases hy : y ≤ 0
+      · exact .inr <| .inr <| .inl <| by nlinarith
+      by_cases ha : a ≤ 0
+      · exact .inr <| .inl <| by nlinarith
+      · exact .inl <| by nlinarith
     · -- Since $x \in [a, b]$ and $y \in [c, d]$, their product $x * y$ is bounded by the products of the endpoints.
-      have h_bounds : x * y ≤ max (a * c) (max (a * d) (max (b * c) (b * d))) := by
-        by_cases hx : 0 ≤ x;
-        -- Case 1
-        · field_simp;
-          by_contra h_contra;
-          push_neg at h_contra;
-          cases le_or_lt 0 c <;> cases le_or_lt 0 d <;> nlinarith;
-        -- Case 2
-        · norm_num +zetaDelta at *;
-          contrapose! hx;
-          cases le_or_lt 0 c <;> cases le_or_lt 0 d <;> nlinarith;
-      contrapose! h_bounds; aesop;
-  -- To prove the reverse direction, assume $c_1$ is in the interval $[min(ac, ad, bc, bd), max(ac, ad, bc, bd)]$. We need to find $x \in [a, b]$ and $y \in [c, d]$ such that $c_1 = xy$.
-  have h_reverse : ∀ c_1, min (a * c) (min (a * d) (min (b * c) (b * d))) ≤ c_1 ∧ c_1 ≤ max (a * c) (max (a * d) (max (b * c) (b * d))) → ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d, c_1 = x * y := by
+      by_cases hx : 0 ≤ x
+      · by_cases hd : d ≤ 0
+        · exact .inr <| .inl <| by nlinarith
+        · exact .inr <| .inr <| .inr <| by nlinarith
+      by_cases hd : d ≤ 0 ∨ c ≤ 0
+      · cases hd <;> exact .inl <| by nlinarith
+      push_neg at hd
+      exact .inr <| .inr <| .inl <| by nlinarith
+  -- To prove the reverse direction, assume $v$ is in the interval $[min(ac, ad, bc, bd), max(ac, ad, bc, bd)]$. We need to find $x \in [a, b]$ and $y \in [c, d]$ such that $v = xy$.
+  have h_reverse : ∀ v,
+        min (a * c) (min (a * d) (min (b * c) (b * d))) ≤ v ∧
+        v ≤ max (a * c) (max (a * d) (max (b * c) (b * d))) →
+      ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d, v = x * y := by
     -- By the intermediate value theorem, since the product function is continuous, the image of the rectangle [a, b] × [c, d] under the product function is connected. Therefore, it must contain all values between the minimum and maximum products.
-    have h_connected : IsConnected (Set.image (fun p : ℝ × ℝ => p.1 * p.2) (Set.Icc a b ×ˢ Set.Icc c d)) := by
-      apply_rules [ IsConnected.image, isConnected_Icc ];
-      -- Case 1
-      · exact ⟨ Set.Nonempty.prod ( Set.nonempty_Icc.2 h1 ) ( Set.nonempty_Icc.2 h2 ), isPreconnected_Icc.prod isPreconnected_Icc ⟩;
-      -- Case 2
-      · exact ContinuousOn.mul continuousOn_fst continuousOn_snd;
-    have h_min : ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d, x * y = min (a * c) (min (a * d) (min (b * c) (b * d))) := by
-      cases min_cases ( a * c ) ( Min.min ( a * d ) ( Min.min ( b * c ) ( b * d ) ) ) <;> cases min_cases ( a * d ) ( Min.min ( b * c ) ( b * d ) ) <;> cases min_cases ( b * c ) ( b * d ) <;> first | exact ⟨ a, Set.left_mem_Icc.mpr h1, c, Set.left_mem_Icc.mpr h2, by linarith ⟩ | exact ⟨ a, Set.left_mem_Icc.mpr h1, d, Set.right_mem_Icc.mpr h2, by linarith ⟩ | exact ⟨ b, Set.right_mem_Icc.mpr h1, c, Set.left_mem_Icc.mpr h2, by linarith ⟩ | exact ⟨ b, Set.right_mem_Icc.mpr h1, d, Set.right_mem_Icc.mpr h2, by linarith ⟩ ;
-    have h_max : ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d, x * y = max (a * c) (max (a * d) (max (b * c) (b * d))) := by
-      cases max_cases ( a * c ) ( Max.max ( a * d ) ( Max.max ( b * c ) ( b * d ) ) ) <;> cases max_cases ( a * d ) ( Max.max ( b * c ) ( b * d ) ) <;> cases max_cases ( b * c ) ( b * d ) <;> first | exact ⟨ a, ⟨ by linarith, by linarith ⟩, c, ⟨ by linarith, by linarith ⟩, by linarith ⟩ | exact ⟨ a, ⟨ by linarith, by linarith ⟩, d, ⟨ by linarith, by linarith ⟩, by linarith ⟩ | exact ⟨ b, ⟨ by linarith, by linarith ⟩, c, ⟨ by linarith, by linarith ⟩, by linarith ⟩ | exact ⟨ b, ⟨ by linarith, by linarith ⟩, d, ⟨ by linarith, by linarith ⟩, by linarith ⟩;
-    intros c_1 hc_1;
-    have := h_connected.Icc_subset ( Set.mem_image_of_mem _ <| Set.mk_mem_prod h_min.choose_spec.1 h_min.choose_spec.2.choose_spec.1 ) ( Set.mem_image_of_mem _ <| Set.mk_mem_prod h_max.choose_spec.1 h_max.choose_spec.2.choose_spec.1 );
-    have := @this c_1;
-    exact Exists.elim ( this ⟨ by linarith [ h_min.choose_spec.2.choose_spec.2 ], by linarith [ h_max.choose_spec.2.choose_spec.2 ] ⟩ ) fun x hx => ⟨ x.1, hx.1.1, x.2, hx.1.2, hx.2.symm ⟩;
-  intro c_1;
-  simp_all ( config := { decide := Bool.true } ) [ min_le_iff, le_max_iff ];
-  apply Iff.intro;
-  -- Case 1
-  · exact fun h => h_reverse c_1 ( by tauto ) ( by tauto );
-  -- Case 2
-  · rintro ⟨ x, hx, y, hy, rfl ⟩ ; specialize h_prod x hx.1 hx.2 y hy.1 hy.2; aesop;
+    have h_connected : IsConnected ((fun p ↦ p.1 * p.2) '' Set.Icc a b ×ˢ Set.Icc c d) := by
+      apply_rules [IsConnected.image, isConnected_Icc, IsConnected.prod]
+      exact continuousOn_fst.mul continuousOn_snd
+    have ⟨x_min, hx_min, y_min, hy_min, hxy_min⟩ : ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d,
+        x * y = min (a * c) (min (a * d) (min (b * c) (b * d))) := by
+      cases min_cases (a * c) (min (a * d) (min (b * c) (b * d)))
+      · exact ⟨a, ⟨le_rfl, h1⟩, c, ⟨le_rfl, h2⟩, by linarith⟩
+      cases min_cases (a * d) (min (b * c) (b * d))
+      · exact ⟨a, ⟨le_rfl, h1⟩, d, ⟨h2, le_rfl⟩, by linarith⟩
+      cases min_cases (b * c) (b * d)
+      · exact ⟨b, ⟨h1, le_rfl⟩, c, ⟨le_rfl, h2⟩, by linarith⟩
+      · exact ⟨b, ⟨h1, le_rfl⟩, d, ⟨h2, le_rfl⟩, by linarith⟩
+    have ⟨x_max, hx_max, y_max, hy_max, hxy_max⟩ : ∃ x ∈ Set.Icc a b, ∃ y ∈ Set.Icc c d,
+        x * y = max (a * c) (max (a * d) (max (b * c) (b * d))) := by
+      cases max_cases (a * c) (max (a * d) (max (b * c) (b * d)))
+      · exact ⟨a, ⟨le_rfl, h1⟩, c, ⟨le_rfl, h2⟩, by linarith⟩
+      cases max_cases (a * d) (max (b * c) (b * d))
+      · exact ⟨a, ⟨le_rfl, h1⟩, d, ⟨h2, le_rfl⟩, by linarith⟩
+      cases max_cases (b * c) (b * d)
+      · exact ⟨b, ⟨h1, le_rfl⟩, c, ⟨le_rfl, h2⟩, by linarith⟩
+      · exact ⟨b, ⟨h1, le_rfl⟩, d, ⟨h2, le_rfl⟩, by linarith⟩
+    have h_sub := h_connected.Icc_subset
+      (Set.mem_image_of_mem _ <| Set.mk_mem_prod hx_min hy_min)
+      (Set.mem_image_of_mem _ <| Set.mk_mem_prod hx_max hy_max)
+    intros v hv
+    obtain ⟨⟨x, y⟩, ⟨⟨hx, hy⟩, rfl⟩⟩ := h_sub ⟨hxy_min ▸ hv.1, hxy_max ▸ hv.2⟩
+    exact ⟨x, hx, y, hy, rfl⟩
+  simp only [Set.mem_Icc, inf_le_iff, le_sup_iff, and_imp] at h_prod h_reverse
+  refine fun c ↦ ⟨fun _ ↦ h_reverse c (by tauto) (by tauto), ?_⟩
+  rintro ⟨x, hx, y, hy, rfl⟩
+  specialize h_prod x hx.1 hx.2 y hy.1 hy.2
+  tauto
 
 theorem mul_ext (x y : ℝRange) : ∀ c, c ∈ x * y ↔ ∃ a ∈ x, ∃ b ∈ y, c = a * b := by
   simp only [NonemptyInterval.mem_def, mul_fst, inf_le_iff, mul_snd, le_sup_iff]
-  apply ℝRange.mul_ext.extracted_1_2 _ _ x.2 _ _ y.2
+  apply ℝRange.mul_ext_bash x.2 y.2
 
 protected theorem mul_comm (x y : ℝRange) : x * y = y * x := by
   rcases x, y with ⟨⟨⟨a₁,a₂⟩, _⟩, ⟨⟨b₁,b₂⟩, _⟩⟩
