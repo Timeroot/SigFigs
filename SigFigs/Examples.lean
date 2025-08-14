@@ -241,3 +241,70 @@ and will be developed separately.
 example (A B : ℝRange) (hA : A = 100 ± 3) (hB : B = 30 ± 15) :
     A + B = 130 ± 18 := by
   sorry
+
+/-! # Function coercion
+
+Any function on the reals can be lifted to a function on intervals. We call this
+operation `ℝRange.map`, and it computes the minimum interval that includes the image.
+That is, unless the image is unbounded, e.g. `map Real.log [-1,1]`, in which case we
+get the junk value `[0,0]`.
+
+In the particular case where the function `f` is Monotone (equivalently, where it's
+an `OrderHom`: `f : ℝ →o ℝ`), this coincides with `NonemptyInterval.map`, and it simply
+maps the endpoints of the interval. But this also encompasses the case where `f` is
+Antitone (and maps the endpoints of the interval after swapping), as well as non-
+monotonic cases. When `f` is `Continuous`, we're guaranteed that a minimum and maximum
+value exist, so there's no risk of junk values. And finally, this guarantees that
+we can always map an exact number (a `ℝRange.pure` value) safely, even if `f` is
+discontinuous. See the following lemmas for proofs of these claims:
+ * `ℝRange.map_Monotone` / `ℝRange.map_MonotoneOn`
+ * `ℝRange.map_Antitone` / `ℝRange.map_AntitoneOn`
+ * `ℝRange.map_Continuous` / `ℝRange.map_ContinuousOn`
+ * `ℝRange.map_pure`
+
+There is a `FunLike (ℝ → ℝ) ℝRange ℝRange` instance available for this, so expressions
+like `⇑Real.sin 5.3` elaborate to mean `map Real.sin (5.3±0.05)`. Usually you have
+to insert this coercion explicitly, but the notation inconvenience is (hopefully)
+small. This funlike instance is hidden behind the `ℝRange` scope.
+-/
+
+--No coercion: this is a plain-old real arithmetic problem.
+example : Real.sqrt (99 / 100 - 1.0) = 0 := by
+  norm_num [Real.sqrt_eq_zero']
+
+/--
+error: cannot coerce to function
+  Real.sqrt
+-/
+#guard_msgs in
+example : ⇑Real.sqrt (99 / 100 - 1.0) ≠ 0 := by --no `open ℝRange`, no coercion to find.
+  sorry
+
+open ℝRange in --now it works
+example : ⇑Real.sqrt (99 / 100 - 1.0) ≠ 0 := by
+  intro h
+  rw [show (99 / 100) = pure 0.99 by norm_num] at h
+  simp [NonemptyInterval.ext_iff, Prod.ext_iff, map_Monotone Real.sqrt_mono] at h
+  norm_num at h
+
+/-
+Note that just writing `(f x : ℝRange)`, as here, does not suffice. It will elaborate
+as `pure (f x)`, i.e. doing an exact real calculation and then casting to a ℝRange,
+as opposed to `map f x`. Accordingly, the `9.0` is parsed as a real. If instead we had
+a ℝRange as the argument, Lean would complain with `Application type mismatch`. We
+have to add the `⇑` explicitly.
+
+(This example is unprovable, it evaluates to `[2.95,3.05] = [3,3]`.)
+-/
+open ℝRange in
+example : 3.0 = (Real.sqrt 9.0 : ℝRange) := by
+  sorry
+
+/- You can avoid the ⇑ if you explicitly give a type ascription, this works too.
+If we didn't `open ℝRange`, this would give a `type mismatch` error.
+
+(This example is also unprovable: it evaluates to `[2.95,3.05] = [√8.95,√9.05]`.)
+-/
+open ℝRange in
+example : 3.0 = (Real.sqrt : ℝRange → ℝRange) 9.0 := by
+  sorry

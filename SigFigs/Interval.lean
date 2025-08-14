@@ -1,6 +1,8 @@
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.RCLike.Basic
 
+import SigFigs.ForMathlib
+
 /-- A `ℝRange` for a range of possible real values associated to a quantity with uncertainty. It's
 a `NonemptyInterval ℝ`, but we give it some other useful instances. -/
 abbrev ℝRange := NonemptyInterval ℝ
@@ -68,7 +70,7 @@ theorem toProd_ratCast (q : ℚ) :
     (NonemptyInterval.toProd (q : ℝRange)) = ((q : ℝ), (q : ℝ)) := by
   rfl
 
-@[simp]
+@[simp↓] --mark as ↓ so that, in `(pure (x + y)).toProd`, we do the toProd first.
 theorem toProd_pure (x : ℝ) :
     (NonemptyInterval.toProd (pure x : ℝRange)) = (x, x) := by
   rfl
@@ -373,17 +375,8 @@ protected theorem pow_zero (x : ℝRange) : x ^ 0 = 1 := by
 protected theorem pow_one (x : ℝRange) : x ^ 1 = x := by
   ext <;> simp
 
---Note that `pow_add` doesn't hold unless (1) both numbers are even, or (2) the interval
--- is nonnegative.
-
---TODO: Mathlibbable...?
-theorem min_natpow {x y : ℝ} (hx : 0 ≤ x) (hy : 0 ≤ y) (n : ℕ) :
-    min x y ^ n = min (x ^ n) (y ^ n) := by
-  sorry
-
-theorem max_natpow {x y : ℝ} (hx : 0 ≤ x) (hy : 0 ≤ y) (n : ℕ) :
-    max x y ^ n = max (x ^ n) (y ^ n) := by
-  sorry
+--We prove `pow_mul`, but note that `pow_add` doesn't hold unless (1) both numbers are even,
+--or (2) the interval is entirely nonnegative.
 
 protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b) := by
   rcases Nat.even_or_odd a with ha | ha
@@ -394,18 +387,18 @@ protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b)
         simp
       ext
       · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul, abs_pow]
-        rw [← min_natpow (by positivity) (by positivity)]
+        rw [← Real.min_natPow (by positivity) (by positivity)]
         simp [h₁, h₂]
       · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul, abs_pow]
-        rw [← max_natpow (by positivity) (by positivity)]
+        rw [← Real.max_natPow (by positivity) (by positivity)]
         simp [h₁, h₂]
     · ext <;> simp [ha, hb, pow_mul]
   · rcases Nat.even_or_odd b with hb | hb
     · ext
       · simp [ha, hb, pow_mul]
-        rw [← min_natpow (by positivity) (by positivity)]
+        rw [← Real.min_natPow (by positivity) (by positivity)]
       · simp [ha, hb, pow_mul]
-        rw [← max_natpow (by positivity) (by positivity)]
+        rw [← Real.max_natPow (by positivity) (by positivity)]
     · ext <;> simp [ha, hb, pow_mul]
 
 /- # Simplifying pure expressions -/
@@ -414,6 +407,19 @@ protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b)
 --delaboration that we want to keep. So, we can't do `attribute [coe] pure`. But,
 --`norm_cast` doesn't accept adding lemmas that don'e have a `coe`-function, either.
 --So, we need to manually add them to the simpExtension: see the #eval's below.
+
+@[simp]
+theorem pure_ofNat (n : ℕ) [n.AtLeastTwo] :
+    (pure (ofNat(n) : ℝ)) = (ofNat(n) : ℝRange) := by
+  rfl
+
+@[simp]
+theorem pure_eq_pure (x y : ℝ) : pure x = pure y ↔ x = y := by
+  constructor
+  · intro h
+    rw [NonemptyInterval.ext_iff, Prod.ext_iff] at h
+    tauto
+  · rintro rfl; rfl
 
 @[simp]
 theorem pure_add_pure (x y : ℝ) : pure (x + y) = x + y :=
@@ -458,10 +464,13 @@ theorem pure_div_pure (x y : ℝ) : pure (x / y) = x / y := by
   rw [ℝRange.div_eq_mul_inv, div_eq_mul_inv, pure_mul_pure]
   rw [← inv_pure]
 
+#eval Lean.Meta.NormCast.addElim `ℝRange.pure_ofNat
+#eval Lean.Meta.NormCast.addElim `ℝRange.pure_eq_pure
 #eval Lean.Meta.NormCast.addMove `ℝRange.pure_add_pure
 #eval Lean.Meta.NormCast.addMove `ℝRange.neg_pure
 #eval Lean.Meta.NormCast.addMove `ℝRange.pure_sub_pure
 #eval Lean.Meta.NormCast.addSquash `ℝRange.pure_natCast
+#eval Lean.Meta.NormCast.addSquash `ℝRange.pure_intCast
 #eval Lean.Meta.NormCast.addSquash `ℝRange.pure_ratCast
 #eval Lean.Meta.NormCast.addMove `ℝRange.pure_mul_pure
 #eval Lean.Meta.NormCast.addMove `ℝRange.inv_pure
@@ -547,3 +556,99 @@ instance : IsSymm ℝRange (· ≈ ·) where
   symm x y := by
     simp; intros
     and_intros <;> linarith
+
+/-- **Lifting* a function** from the reals to intervals. For a monotone function, this just maps the
+endpoints; but in general we need to consider the min/max within the interval.
+
+If the function isn't bounded on this interval, then we give the junk value `[0, 0]`. This is relatively
+rare - it can't happen if the function is continuous - so we would like to cordon off this ugly
+behavior where possible. Thus, this is marked irreducible.
+-/
+@[irreducible]
+noncomputable def map (f : ℝ → ℝ) (x : ℝRange) : ℝRange :=
+  open Classical in
+  if h : BddBelow (f '' (x : Set ℝ)) ∧ BddAbove (f '' (x : Set ℝ)) then
+    ⟨⟨sInf (f '' (x : Set ℝ)), sSup (f '' (x : Set ℝ))⟩,
+      csInf_le_csSup h.1 h.2 ((NonemptyInterval.coe_nonempty x).image f)⟩
+  else 0
+
+theorem map_ContinuousOn (x : ℝRange) {f : ℝ → ℝ} (hf : ContinuousOn f x) :
+    map f x = ⟨⟨sInf (f '' (x : Set ℝ)), sSup (f '' (x : Set ℝ))⟩,
+      csInf_le_csSup
+        (CompactIccSpace.isCompact_Icc.bddBelow_image hf)
+        (CompactIccSpace.isCompact_Icc.bddAbove_image hf)
+        ((NonemptyInterval.coe_nonempty x).image f)⟩ := by
+  unfold map
+  rw [dif_pos]
+  use CompactIccSpace.isCompact_Icc.bddBelow_image hf
+  exact CompactIccSpace.isCompact_Icc.bddAbove_image hf
+
+theorem map_Continuous {f : ℝ → ℝ} (hf : Continuous f) (x : ℝRange) :
+  map f x = ⟨⟨sInf (f '' (x : Set ℝ)), sSup (f '' (x : Set ℝ))⟩,
+    csInf_le_csSup
+      (CompactIccSpace.isCompact_Icc.bddBelow_image hf.continuousOn)
+      (CompactIccSpace.isCompact_Icc.bddAbove_image hf.continuousOn)
+      ((NonemptyInterval.coe_nonempty x).image f)⟩ :=
+  map_ContinuousOn x hf.continuousOn
+
+theorem map_MonotoneOn (x : ℝRange) {f : ℝ → ℝ} (hf : MonotoneOn f x) :
+    map f x = ⟨⟨f x.fst, f x.snd⟩, hf (by simp) (by simp) x.2⟩ := by
+  have hb : BddBelow (f '' x) := by
+    apply hf.map_bddBelow .rfl
+    use x.fst
+    simp [NonemptyInterval.mem_def, lowerBounds, x.2]
+    tauto
+  have ha : BddAbove (f '' x) := by
+    apply hf.map_bddAbove .rfl
+    use x.snd
+    simp [NonemptyInterval.mem_def, upperBounds, x.2]
+  rw [map, dif_pos ⟨hb, ha⟩, NonemptyInterval.mk.injEq, Prod.mk.injEq]
+  constructor
+  · convert hf.sInf_image_Icc x.2
+  · convert hf.sSup_image_Icc x.2
+
+@[simp]
+theorem map_Monotone {f : ℝ → ℝ} (hf : Monotone f) (x : ℝRange) :
+    map f x = ⟨⟨f x.fst, f x.snd⟩, hf x.2⟩ :=
+  map_MonotoneOn x (hf.monotoneOn _)
+
+theorem map_AntitoneOn (x : ℝRange) {f : ℝ → ℝ} (hf : AntitoneOn f x) :
+    map f x = ⟨⟨f x.snd, f x.fst⟩, hf (by simp) (by simp) x.2⟩ := by
+  have ha : BddAbove (f '' x) := by
+    apply hf.map_bddBelow .rfl
+    use x.fst
+    simp [NonemptyInterval.mem_def, lowerBounds, x.2]
+    tauto
+  have hb : BddBelow (f '' x) := by
+    apply hf.map_bddAbove .rfl
+    use x.snd
+    simp [NonemptyInterval.mem_def, upperBounds, x.2]
+  rw [map, dif_pos ⟨hb, ha⟩, NonemptyInterval.mk.injEq, Prod.mk.injEq]
+  constructor
+  · convert hf.sInf_image_Icc x.2
+  · convert hf.sSup_image_Icc x.2
+
+@[simp]
+theorem map_Antitone {f : ℝ → ℝ} (hf : Antitone f) (x : ℝRange) :
+    map f x = ⟨⟨f x.snd, f x.fst⟩, hf x.2⟩ :=
+  map_AntitoneOn x (hf.antitoneOn _)
+
+@[simp]
+theorem map_pure (f : ℝ → ℝ) (x : ℝ) : map f (pure x) = f x := by
+  ext <;> simp [map]
+
+scoped instance : FunLike (ℝ → ℝ) ℝRange ℝRange where
+  coe f := ℝRange.map f
+  coe_injective' _ _ h := by
+    funext x
+    simpa using congrFun h x
+
+/-- This simp lemma, arguably, makes things slightly harder to read: a simple coercion
+is turned into a `map f`. But frequently enough, I expect, the implicitness of this
+could confuse the reader, and make copying claims (e.g. for a `have`) harder. In this
+case, it seems better to encourage explicitness of the cast. -/
+@[simp]
+theorem funLike_eq_map (f : ℝ → ℝ) : (⇑f : ℝRange → ℝRange) = map f := by
+  rfl
+
+end ℝRange
