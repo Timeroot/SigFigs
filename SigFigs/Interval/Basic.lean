@@ -124,25 +124,34 @@ macro n:term "±" pm:term : term => `((⟨⟨$n - $pm, $n + $pm⟩, by linarith�
 
 /- # Simplifying pure expressions -/
 
+--`pure_zero`, `pure_one`, `pure_natCast`, `pure_add_pure` are already simp'ed in `NonemptyInterval`.
+
+theorem pure_zero : (pure (0 : ℝ)) = (0 : ℝRange) := by
+  simp says simp only [NonemptyInterval.pure_zero]
+
+theorem pure_one : (pure (1 : ℝ)) = (1 : ℝRange) := by
+  simp says simp only [NonemptyInterval.pure_one]
+
+theorem pure_natCast (n : ℕ) : pure (n : ℝ) = n := by
+  simp says simp only [NonemptyInterval.pure_natCast]
+
+theorem pure_add_pure (x y : ℝ) : pure (x + y) = x + y := by
+  simp says simp only [NonemptyInterval.pure_add_pure]
+
 @[simp]
 theorem pure_ofNat (n : ℕ) [n.AtLeastTwo] :
     (pure (ofNat(n) : ℝ)) = (ofNat(n) : ℝRange) := by
   rfl
 
+theorem pure_injective : pure.Injective := by
+  intro _ _ h
+  rw [NonemptyInterval.ext_iff, Prod.ext_iff] at h
+  exact h.1
+
 @[simp]
 theorem pure_eq_pure (x y : ℝ) : pure x = pure y ↔ x = y := by
-  constructor
-  · intro h
-    rw [NonemptyInterval.ext_iff, Prod.ext_iff] at h
-    tauto
-  · rintro rfl; rfl
-
-@[simp]
-theorem pure_add_pure (x y : ℝ) : pure (x + y) = x + y :=
-  NonemptyInterval.pure_add_pure x y
-
-@[simp]
-theorem pure_natCast (n : ℕ) : pure (n : ℝ) = n := by
+  use @pure_injective _ _
+  rintro rfl
   rfl
 
 @[simp]

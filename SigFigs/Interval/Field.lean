@@ -18,6 +18,8 @@ namespace ℝRange
 instance : SubtractionCommMonoid ℝRange :=
   inferInstance
 
+--TODO: AddCancelMonoid? Even better?
+
 --See https://github.com/Timeroot/ComputableReal/blob/61221e0d67648119919bc51b27e693766f48c791/ComputableReal/ComputableRSeq.lean#L13C37-L23C1
 /--Multiplication on intervals of ℚ. TODO: Should generalize to any LinearOrderedField... -/
 def mul_pair (x y : ℝRange) : ℝRange :=
