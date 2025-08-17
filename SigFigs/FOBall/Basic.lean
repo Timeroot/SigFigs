@@ -1,5 +1,7 @@
 import Mathlib.Analysis.RCLike.Basic
 
+import SigFigs.ForMathlib
+
 open NNReal
 
 /-! # First-Order Ball Arithmetic
@@ -313,73 +315,6 @@ noncomputable instance : MulZeroOneClass FOBall where
 instance : HasDistribNeg FOBall where
   neg_mul _ _ := by simp [FOBall.ext_iff]
   mul_neg _ _ := by simp [FOBall.ext_iff]
-
-/-- To give `FOBall.pure` a nice ring homomorphism structure manifestly, we'd like to give it a `RingHom`
-type. But, that would require actually having a `Ring` of some sort, which we don't, sad. So, we define
-an exact alias of it (with weaker requirements) here.
-
-Unfortunately -- such a type requires an `AddZeroClass` structure and a `MulZeroOneClass`
-structure. The unique common ancestor of these is `NonAssocSemiring`, which again, we don't have. And
-if we give them individually, then we have multiple definitions of `Zero` - neither of these exist
-as mixins. So, we need to define a new class for this.
--/
-class MinimalRing (β : Type*) extends AddZeroClass β, MulZeroOneClass β
-
-instance (β : Type*) [NonAssocSemiring β] : MinimalRing β where
-
-structure MinimalRingHom (α : Type*) (β : Type*) [MinimalRing α] [MinimalRing β] extends
-  α →* β, α →+ β, α →ₙ* β, α →*₀ β
-
-section MinimalRingHomClass
-
-class MinimalRingHomClass (F : Type*) (α β : outParam Type*)
-    [MinimalRing α] [MinimalRing β] [FunLike F α β] : Prop
-  extends MonoidHomClass F α β, AddMonoidHomClass F α β, MulHomClass F α β, MonoidWithZeroHomClass F α β
-
-variable {F α β : Type*} [FunLike F α β]
-
-@[coe]
-def MinimalRingHomClass.toMinimalRingHom {_ : MinimalRing α} {_ : MinimalRing β} [MinimalRingHomClass F α β]
-    (f : F) : MinimalRingHom α β :=
-  { (f : α →* β), (f : α →+ β) with }
-
-instance {_ : MinimalRing α} {_ : MinimalRing β} [MinimalRingHomClass F α β] :
-    CoeTC F (MinimalRingHom α β) :=
-  ⟨MinimalRingHomClass.toMinimalRingHom⟩
-
-instance MinimalRingHomClass.toRingHomClass [NonAssocSemiring α] [NonAssocSemiring β]
-    [MinimalRingHomClass F α β] : RingHomClass F α β :=
-  { ‹MinimalRingHomClass F α β› with }
-
-end MinimalRingHomClass
-
-namespace MinimalRingHom
-
-/-!
-Throughout this section, some `Semiring` arguments are specified with `{}` instead of `[]`.
-See note [implicit instance arguments].
--/
-
-variable [MinimalRing α] [MinimalRing β]
-
-instance instFunLike : FunLike (MinimalRingHom α β) α β where
-  coe f := f.toFun
-  coe_injective' f g h := by
-    cases f
-    cases g
-    congr
-    apply DFunLike.coe_injective'
-    exact h
-
-instance : MinimalRingHomClass (MinimalRingHom α β) α β where
-  map_add := MinimalRingHom.map_add'
-  map_zero := MinimalRingHom.map_zero'
-  map_mul f := f.map_mul'
-  map_one f := f.map_one'
-
-initialize_simps_projections MinimalRingHom (toFun → apply)
-
-end MinimalRingHom
 
 noncomputable instance : MinimalRing FOBall where
 

@@ -131,7 +131,7 @@ protected theorem mul_assoc (x y z : ℝRange) : (x * y) * z = x * (y * z) := by
   · rintro ⟨a, ha, _, ⟨⟨b, hb, c, hc, rfl⟩, rfl⟩⟩
     exact ⟨a * b, ⟨a, ha, b, hb, rfl⟩, c, hc, (mul_assoc a b c).symm⟩
 
-theorem pure_trichotomy (x : ℝRange) (y : ℝ) :
+theorem mem_trichotomy (x : ℝRange) (y : ℝ) :
     x.snd < y ∨ y < x.fst ∨ y ∈ x := by
   rw [or_iff_not_imp_left, or_iff_not_imp_left]
   intro h₁ h₂
@@ -142,7 +142,7 @@ theorem pure_trichotomy (x : ℝRange) (y : ℝ) :
 then the inverse is the unique number 0. Otherwise, it's `[1/snd, 1/fst]` as one would expect. -/
 instance : Inv ℝRange :=
   ⟨fun x ↦ open Classical in if h : 0 ∈ x then 0 else ⟨(x.snd⁻¹, x.fst⁻¹), by
-    rcases pure_trichotomy x 0 with h₁ | h₂ | h_mem
+    rcases mem_trichotomy x 0 with h₁ | h₂ | h_mem
     · have h₂ : x.fst < 0 := by linarith [x.2]
       simp [inv_le_inv_of_neg h₁ h₂, x.2]
     · have h₁ : 0 < x.snd := by linarith [x.2]
@@ -220,6 +220,46 @@ protected theorem div_eq_mul_inv (x y : ℝRange) : x / y = x * y⁻¹ := by
 --TODO: Copies of `inv_eq_of_mul`, `mul_inv_rev`,
 -- `inv_eq_of_mul_eq_one_left`, `eq_inv_of_mul_eq_one_left`
 
+/-! # Casting lemmas -/
+
+@[simp]
+theorem neg_pure (x : ℝ) : pure (-x) = -x :=
+  NonemptyInterval.neg_pure x
+
+@[simp]
+theorem pure_sub_pure (x y : ℝ) : pure (x - y) = x - y :=
+  NonemptyInterval.pure_sub_pure x y
+
+@[simp]
+theorem pure_mul_pure (x y : ℝ) : pure (x * y) = x * y := by
+  ext
+  · simp [mul_fst]
+  · simp [mul_snd]
+
+@[simp]
+theorem inv_pure (x : ℝ) : x⁻¹ = (pure x)⁻¹ := by
+  by_cases hx : x = 0
+  · simp [hx, inv_of_zero_mem]
+  ext
+  · simp [fst_inv_of_zero_notMem, Ne.symm hx]
+  · simp [snd_inv_of_zero_notMem, Ne.symm hx]
+
+@[simp]
+theorem pure_div_pure (x y : ℝ) : pure (x / y) = x / y := by
+  rw [ℝRange.div_eq_mul_inv, div_eq_mul_inv, pure_mul_pure]
+  rw [← inv_pure]
+
+noncomputable instance : MinimalRing ℝRange where
+
+/-- `ℝRange.pure` bundled as a `01+*` homomorphism. -/
+@[simps apply]
+def pureHom : MinimalRingHom ℝ ℝRange where
+  toFun := pure
+  map_zero' := rfl
+  map_one' := rfl
+  map_add' := by simp
+  map_mul' := by simp
+
 /-! # Natural and integer powers -/
 
 def natPow (x : ℝRange) (n : ℕ) : ℝRange :=
@@ -252,6 +292,17 @@ theorem natPow_odd_fst (x : ℝRange) {n : ℕ} (hn : Odd n) :
 theorem natPow_odd_snd (x : ℝRange) {n : ℕ} (hn : Odd n) :
     (x ^ n).snd = (x.snd) ^ n :=
   congrArg Prod.snd <| congrArg NonemptyInterval.toProd (dif_neg (Nat.not_even_iff_odd.mpr hn))
+
+/-- `natPow` coincides with the canonically lifted `map`. -/
+@[simp]
+theorem map_natPow (n : ℕ) : map (· ^ n) = (· ^ n) := by
+  sorry
+
+@[simp]
+theorem coe_natPow (n : ℕ) : (⇑(· ^ n : ℝ → ℝ)) = (· ^ n) := by
+  simp
+
+--TODO appropriate `mem` lemmas
 
 @[simp]
 protected theorem pow_zero (x : ℝRange) : x ^ 0 = 1 := by
@@ -288,35 +339,6 @@ protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b)
     · ext <;> simp [ha, hb, pow_mul]
 
 --TODO IntPow
-
-/-! # Casting lemmas -/
-
-@[simp]
-theorem neg_pure (x : ℝ) : pure (-x) = -x :=
-  NonemptyInterval.neg_pure x
-
-@[simp]
-theorem pure_sub_pure (x y : ℝ) : pure (x - y) = x - y :=
-  NonemptyInterval.pure_sub_pure x y
-
-@[simp]
-theorem pure_mul_pure (x y : ℝ) : pure (x * y) = x * y := by
-  ext
-  · simp [mul_fst]
-  · simp [mul_snd]
-
-@[simp]
-theorem inv_pure (x : ℝ) : x⁻¹ = (pure x)⁻¹ := by
-  by_cases hx : x = 0
-  · simp [hx, inv_of_zero_mem]
-  ext
-  · simp [fst_inv_of_zero_notMem, Ne.symm hx]
-  · simp [snd_inv_of_zero_notMem, Ne.symm hx]
-
-@[simp]
-theorem pure_div_pure (x y : ℝ) : pure (x / y) = x / y := by
-  rw [ℝRange.div_eq_mul_inv, div_eq_mul_inv, pure_mul_pure]
-  rw [← inv_pure]
 
 /-
 Note: We don't want to mark `ℝRange.pure` as a `coe` because then we lose some of the control over
