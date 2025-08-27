@@ -1,4 +1,5 @@
 import Mathlib.Analysis.RCLike.Basic
+import Mathlib.Analysis.Calculus.Deriv.Slope
 
 import SigFigs.ForMathlib
 
@@ -96,25 +97,7 @@ V[X] 𝔼[Y]^2 +                    V[X] 𝔼[Z]^2 + V[Y] 𝔼[X]^2 + V[Y] 𝔼[
 V[XY] + V[XZ] = (true when XY vs. XZ independent)
 V[XY + XZ]
 ```
-Here the justification is given on each line. The error between the two is highlighted in the middle,
-an error of `2 V[X] 𝔼[Y] 𝔼[Z]` higher variance on `V[X(Y+Z)]`. And each step alone is justified
-appropriately (treating X/Y/Z as independent variables), except for the line
-`(true when XY vs. XZ independent)`, when clearly is not realistically true. Then the corrected formula
-would be,
-```
-V[XY + XZ] =
-V[XY] + V[XZ] + 2Cov[XY, XZ]
-```
-where the covariance term is
-```
-Cov[XY, XZ] =
-𝔼[(XY)(XZ)] - 𝔼[XY] 𝔼[XZ] =
-𝔼[X²YZ] - 𝔼[XY] 𝔼[XZ] =
-𝔼[X²] 𝔼[Y] 𝔼[Z] - (𝔼[X] 𝔼[Y]) (𝔼[X] 𝔼[Z]) =
-(𝔼[X²] - 𝔼[X]^2) 𝔼[Y] 𝔼[Z] =
-V[X] 𝔼[Y] 𝔼[Z]
-```
-as expected. By treating the errors in `XY` and `XZ` as independent, instead of appropriately correlated,
+By treating the errors in `XY` and `XZ` as independent, instead of appropriately correlated,
 we underestimate the variance.
 -/
 
@@ -183,7 +166,17 @@ theorem mid_one : mid 1 = 1 := by
 theorem var_one : var 1 = 0 := by
   rfl
 
---TODO: simps for NatCast / IntCast / RatCast
+@[simp]
+theorem mid_ofNat (n : ℕ) [n.AtLeastTwo] :
+    (ofNat(n) : FOBall).mid = n := by
+  rfl
+
+@[simp]
+theorem var_ofNat (n : ℕ) [n.AtLeastTwo] :
+    (ofNat(n) : FOBall).var = 0 := by
+  rfl
+
+--TODO: simps for IntCast / RatCast
 
 @[simp]
 theorem mid_add (x y : FOBall) : (x + y).mid = x.mid + y.mid := by
@@ -369,8 +362,304 @@ theorem pure_mul (x y : ℝ) : pure (x * y) = pure x * pure y := by
 
 @[simp]
 theorem pure_inv (x : ℝ) : pure (x⁻¹) = (pure x)⁻¹ := by
-  sorry
+  ext <;> simp
 
 @[simp]
 theorem pure_div (x y : ℝ) : pure (x / y) = pure x / pure y := by
-  sorry
+  ext <;> simp
+
+section ofScientific
+
+def ofScientific (m : ℕ) (sign : Bool) (e : ℕ) : FOBall :=
+  let e' := (if sign then -e else e : ℤ);
+  ⟨(m * 10^e' : ℚ), ⟨(10^e' / 2 : ℚ)^2, sq_nonneg _⟩⟩
+
+instance : OfScientific FOBall where
+  ofScientific := ofScientific
+
+@[simp]
+theorem ofScientific_mid (m : ℕ) (sign : Bool) (e : ℕ) :
+    (OfScientific.ofScientific m sign e : FOBall).mid =
+      (m * 10^(if sign then -e else e : ℤ) : ℚ) := by
+  rfl
+
+@[simp]
+theorem ofScientific_e (m : ℕ) (sign : Bool) (e : ℕ) :
+    (OfScientific.ofScientific m sign e : FOBall).var =
+      ⟨(10^(if sign then -e else e : ℤ) / 2 : ℚ)^2, sq_nonneg _⟩ := by
+  rfl
+
+end ofScientific
+
+section setlike
+
+/-- Interpreting an `FOBall` as a confidence interval, is the given value
+`x` consistent with it? -/
+def mem (r : FOBall) (x : ℝ) : Prop :=
+  (x - r.mid)^2 ≤ r.var
+
+instance : SetLike FOBall ℝ where
+  coe r := setOf r.mem
+  coe_injective' r s h := by
+    simp [Set.ext_iff, mem] at h
+    rcases lt_trichotomy (r.mid + √r.var) (s.mid + √s.var) with h₂ | h₂ | h₂
+    rotate_left
+    · rcases lt_trichotomy (r.mid - √r.var) (s.mid - √s.var) with h₂ | h₂ | h₂
+      rotate_left
+      · have hm : r.mid = s.mid := by linarith
+        have hv : √r.var = √s.var := by linarith
+        rw [Real.sqrt_inj (by positivity) (by positivity), ← NNReal.eq_iff] at hv
+        simp [hm, hv, FOBall.ext_iff]
+      · exfalso
+        specialize h (s.mid - √s.var)
+        simp only [sub_sub_cancel_left, even_two, Even.neg_pow, zero_le_coe,
+          Real.sq_sqrt, le_refl, iff_true] at h
+        rw [← one_mul (_^2), ← neg_one_sq, ← mul_pow, neg_mul] at h
+        rw [← Real.le_sqrt' (by linarith [Real.sqrt_nonneg r.var])] at h
+        linarith
+      · exfalso
+        specialize h (r.mid - √r.var)
+        simp only [sub_sub_cancel_left, even_two, Even.neg_pow, zero_le_coe,
+          Real.sq_sqrt, le_refl, true_iff] at h
+        rw [← one_mul (_^2), ← neg_one_sq, ← mul_pow, neg_mul] at h
+        rw [← Real.le_sqrt' (by linarith [Real.sqrt_nonneg r.var])] at h
+        linarith
+    · exfalso
+      specialize h (r.mid + √r.var)
+      simp at h
+      rw [← Real.le_sqrt' (by linarith [Real.sqrt_nonneg s.var])] at h
+      linarith
+    · exfalso
+      specialize h (s.mid + √s.var)
+      simp at h
+      rw [← Real.le_sqrt' (by linarith [Real.sqrt_nonneg r.var])] at h
+      linarith
+
+theorem mem_def (r : FOBall) (x : ℝ) : x ∈ r ↔ (x - r.mid)^2 ≤ r.var := by
+  rfl
+
+section map
+
+--For Mathlib
+section lipschitzAt
+open Topology
+
+def LipschitzAtFilter {X Y : Type*} [EDist X] [EDist Y]
+    (f : X → Y) (l : Filter (X × X)) : Prop :=
+  ∃ (C : NNReal), ∀ᶠ z in l, edist (f z.1) (f z.2) ≤ C * edist z.1 z.2
+
+def LipschitzWithAtFilter {X Y : Type*} [EDist X] [EDist Y]
+    (C : NNReal) (f : X → Y) (l : Filter (X × X)) : Prop :=
+  ∀ᶠ z in l, edist (f z.1) (f z.2) ≤ C * edist z.1 z.2
+
+def LipschitzAt {X Y : Type*} [TopologicalSpace X] [EDist X] [EDist Y]
+    (f : X → Y) (p : X) : Prop :=
+  ∃ (C : NNReal), ∀ᶠ z in 𝓝 p , edist (f z) (f p) ≤ C * edist z p
+
+def LipschitzWithAt {X Y : Type*} [TopologicalSpace X] [EDist X] [EDist Y]
+    (C : NNReal) (f : X → Y) (p : X) : Prop :=
+  ∀ᶠ z in 𝓝 p , edist (f z) (f p) ≤ C * edist z p
+
+/-- The infimum of constants C so that `f` is C-Lipschitz on the filter `l`. -/
+noncomputable def lipschitzAt {X Y : Type*} [TopologicalSpace X] [EDist X] [EDist Y]
+    (f : X → Y) (p : X) : NNReal :=
+  sInf {C | LipschitzWithAt C f p}
+
+@[simp]
+theorem _root_.DifferentiableAt.LipschitzAt {f : ℝ → ℝ} {x : ℝ} (hf : DifferentiableAt ℝ f x) :
+    LipschitzAt f x := by
+  obtain ⟨w, h⟩ : ∃ C : ℝ, ∀ᶠ z in nhds x, |f z - f x| ≤ C * |z - x| := by
+    -- Since $f$ is differentiable at $x$, we have $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$.
+    have h_deriv : Filter.Tendsto (fun z => (f z - f x) / (z - x)) (nhdsWithin x {x}ᶜ) (nhds (deriv f x)) := by
+      simpa [hasDerivAt_iff_tendsto_slope, div_eq_inv_mul] using hf.hasDerivAt
+    -- Since the limit of the difference quotient is $f'(x)$, we can find a neighborhood around $x$ where the absolute value of the difference quotient is bounded by $|f'(x)| + 1$.
+    obtain ⟨C, hC⟩ : ∃ C : ℝ, ∀ᶠ z in nhdsWithin x {x}ᶜ, |(f z - f x) / (z - x)| ≤ C := by
+      exact ⟨_, h_deriv.abs.eventually (ge_mem_nhds <| lt_add_one _)⟩
+    -- Since $|(f z - f x) / (z - x)| \leq C$ for $z \neq x$, multiplying both sides by $|z - x|$ gives
+    -- $|f z - f x| \leq C * |z - x|$ for $z \neq x$. For $z = x$, $|f z - f x| = 0 \leq C * |z - x|$ trivially.
+    use C
+    have : ∀ᶠ z in nhds x, z ≠ x → |f z - f x| ≤ C * |z - x| := by
+      rw [eventually_nhdsWithin_iff] at hC
+      filter_upwards [hC] with z hz hzx using by
+        simpa only [abs_div, div_le_iff₀ (abs_pos.mpr (sub_ne_zero.mpr hzx))] using hz hzx
+    filter_upwards [this] with z hz using if h : z = x then by simp [h] else hz h
+  use ⟨|w|, by positivity⟩
+  filter_upwards [h] with z hz
+  exact ENNReal.coe_le_coe.mpr (by
+    simpa [abs_mul] using hz.trans (mul_le_mul_of_nonneg_right (le_abs_self _) (abs_nonneg _)))
+
+/-- For differentiable functions, the lipschitz constant at a point is the absolute
+value of the derivative. -/
+@[simp]
+theorem _root_.DifferentiableAt.lipschitzAt_eq_deriv {f : ℝ → ℝ} {x : ℝ} (hf : DifferentiableAt ℝ f x) :
+    lipschitzAt f x = ‖deriv f x‖₊ := by
+  ext
+  simp only [coe_nnnorm, Real.norm_eq_abs]
+    -- Suppose $C > |f'(x)|$. We need to show that $f$ is $C$-Lipschitz at $x$.
+  have h_C_lipschitz : ∀ (C : NNReal), (C > abs (deriv f x)) → (LipschitzWithAt C f x) := by
+    -- By definition of the derivative, we know that $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$.
+    have h_deriv : Filter.Tendsto (fun z => (f z - f x) / (z - x)) (nhdsWithin x {x}ᶜ) (nhds (deriv f x)) := by
+      -- By definition of the derivative, we know that $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$ follows directly from the fact that $f$ is differentiable at $x$.
+      have h_deriv : HasDerivAt f (deriv f x) x := by
+        exact hf.hasDerivAt;
+      rw [ hasDerivAt_iff_tendsto_slope ] at h_deriv;
+      simpa [ div_eq_inv_mul ] using h_deriv;
+    intro C hC
+    have h_bound : ∀ᶠ z in nhdsWithin x {x}ᶜ, abs ((f z - f x) / (z - x)) ≤ C := by
+      have := h_deriv.abs;
+      exact this.eventually ( ge_mem_nhds hC );
+    rw [ eventually_nhdsWithin_iff ] at h_bound;
+    filter_upwards [ h_bound ] with y hy;
+    by_cases h : y = x <;> simp_all ( config := { decide := Bool.true } ) [ edist_dist, abs_div ];
+    rw [ ← ENNReal.ofReal_coe_nnreal ];
+    rw [ ← ENNReal.ofReal_mul ( by positivity ), div_le_iff₀ ( abs_pos.mpr ( sub_ne_zero.mpr h ) ) ] at * ;
+    simp_all only [dist_pos, ne_eq, not_false_eq_true, mul_nonneg_iff_of_pos_right, NNReal.zero_le_coe,
+      ENNReal.ofReal_le_ofReal_iff]
+    exact hy
+  refine' le_antisymm _ _;
+  -- Case 1
+  · -- Fix any $C > |f'(x)|$.
+    by_contra h_contra;
+    -- Since $|f'(x)| < C$, we can choose $C$ such that $|f'(x)| < C$.
+    obtain ⟨C, hC⟩ : ∃ C : NNReal, |deriv f x| < C ∧ C < lipschitzAt f x := by
+      exact ⟨ ⟨ ( |deriv f x| + ↑ ( lipschitzAt f x ) ) / 2, by positivity ⟩, by norm_num; linarith, by exact NNReal.coe_lt_coe.mp ( by norm_num; linarith ) ⟩;
+    exact hC.2.not_ge <| csInf_le ⟨ 0, fun C hC => by positivity ⟩ <| h_C_lipschitz C hC.1;
+  -- Case 2
+  · -- Suppose $C < |f'(x)|$. We need to show that $f$ is not $C$-Lipschitz at $x$.
+    have h_not_C_lipschitz : ∀ (C : NNReal), (C < abs (deriv f x)) → ¬(LipschitzWithAt C f x) := by
+      -- By definition of Lipschitz continuity, if $f$ is $C$-Lipschitz at $x$, then for all $y$ near $x$, we have $|f(y) - f(x)| \leq C |y - x|$.
+      intro C hC_lt
+      by_contra h_contra
+      obtain ⟨ε, hε_pos, hε⟩ : ∃ ε > 0, ∀ y, abs (y - x) < ε → abs (f y - f x) ≤ C * abs (y - x) := by
+        rcases Metric.mem_nhds_iff.mp h_contra with ⟨ ε, ε_pos, hε ⟩;
+        -- Since Metric.ball x ε is the set of points within ε distance from x, we can use the same ε from hε.
+        use ε, ε_pos;
+        simp_all ( config := { decide := Bool.true } ) [ edist_dist ];
+        intro y hy;
+        specialize hε hy;
+        rw [ Set.mem_setOf_eq ] at hε;
+        rw [ ENNReal.ofReal_le_iff_le_toReal ] at hε
+        -- Case 1
+        · simp_all only [ENNReal.toReal_mul, ENNReal.coe_toReal]
+          simpa [ Real.dist_eq, ENNReal.toReal_ofReal ( abs_nonneg _ ) ] using hε;
+        -- Case 2
+        · simp_all only [ne_eq]
+          apply Aesop.BuiltinRules.not_intro
+          intro a
+          simp_all only [le_top]
+          rw [ ENNReal.mul_eq_top ] at a;
+          aesop;
+      -- Taking the limit as $y$ approaches $x$, we get $|f'(x)| \leq C$.
+      have h_lim : Filter.Tendsto (fun y => abs ((f y - f x) / (y - x))) (nhdsWithin x {x}ᶜ) (nhds (abs (deriv f x))) := by
+        have := hf.hasDerivAt;
+        rw [ hasDerivAt_iff_tendsto_slope ] at this;
+        simpa [ div_eq_inv_mul ] using this.abs;
+      have h_lim_le : ∀ᶠ y in nhdsWithin x {x}ᶜ, abs ((f y - f x) / (y - x)) ≤ C := by
+        filter_upwards [ self_mem_nhdsWithin, mem_nhdsWithin_of_mem_nhds ( Metric.ball_mem_nhds x hε_pos ) ] with y hy hy' using by
+          rw [ abs_div ];
+          exact div_le_of_le_mul₀ ( abs_nonneg _ ) ( by positivity ) ( hε y hy' )
+      exact hC_lt.not_ge <| le_of_tendsto h_lim h_lim_le;
+    refine' le_of_not_gt fun h => _;
+    -- By definition of infimum, if the infimum is less than |deriv f x|, there exists some C in the set such that C < |deriv f x|.
+    obtain ⟨C, hC⟩ : ∃ C : NNReal, C ∈ {C : NNReal | LipschitzWithAt C f x} ∧ (C : ℝ) < |deriv f x| := by
+      have h_inf : ∀ ε > 0, ∃ C : NNReal, C ∈ {C : NNReal | LipschitzWithAt C f x} ∧ C < lipschitzAt f x + ε := by
+        intro ε ε_pos;
+        exact exists_lt_of_csInf_lt ( show { C : NNReal | LipschitzWithAt C f x }.Nonempty from ⟨ _, h_C_lipschitz ( ⟨ |deriv f x| + 1, by positivity ⟩ : NNReal ) ( by norm_num ) ⟩ ) ( lt_add_of_pos_right _ ε_pos );
+      exact Exists.elim ( h_inf ( ⟨ |deriv f x| - lipschitzAt f x, sub_nonneg.2 h.le ⟩ ) ( sub_pos.2 h ) ) fun C hC => ⟨ C, hC.1, by linarith [ show ( C : ℝ ) < lipschitzAt f x + ( |deriv f x| - lipschitzAt f x ) from mod_cast hC.2 ] ⟩;
+    aesop
+
+theorem _root_.abs_isLipschitzAt (x : ℝ) : LipschitzAt abs x := by
+  -- The absolute value function is Lipschitz with constant 1, so we can choose C = 1.
+  use 1;
+  simp [ edist_dist ];
+  -- The absolute value function is continuous, so we can bound the distances by considering the values of $|z|$ and $|x|$.
+  have h_cont : ∀ z : ℝ, abs (abs z - abs x) ≤ abs (z - x) := by
+    exact fun z => abs_abs_sub_abs_le_abs_sub z x;
+  refine Filter.Eventually.of_forall fun z => by simpa [ Real.dist_eq ] using h_cont z
+
+@[simp]
+theorem _root_.abs_lipschitzAt (x : ℝ) : lipschitzAt abs x = 1 := by
+  refine' le_antisymm _ _;
+  · refine' csInf_le _ _;
+    · exact ⟨ 0, fun C hC => NNReal.coe_nonneg _ ⟩;
+    · -- We need to show that 1 is a Lipschitz constant for the absolute value function at any point x.
+      simp [LipschitzWithAt];
+      norm_num [ edist_dist ];
+      exact Filter.Eventually.of_forall fun z => (abs_abs_sub_abs_le_abs_sub z x);
+  · refine' le_csInf _ _ <;> norm_num;
+    · use 1
+      simp only [LipschitzWithAt, Set.mem_setOf_eq, ENNReal.coe_one, one_mul,
+        edist_dist, dist_nonneg, ENNReal.ofReal_le_ofReal_iff];
+      exact Filter.Eventually.of_forall fun z => ( by simpa [ Real.dist_eq ] using abs_abs_sub_abs_le_abs_sub z x);
+    · intro b a
+      -- By definition of Lipschitz continuity at a point, we have that for all $z$ near $x$, $|abs(z) - abs(x)| \leq b * |z - x|$.
+      have h_lip : ∀ᶠ z in nhds x, |abs z - abs x| ≤ b * |z - x| := by
+        convert a using 1;
+        -- The Lipschitz condition with constant b at x for the absolute value function is exactly the statement that for all z near x, | |z| - |x| | ≤ b * |z - x|.
+        simp [LipschitzWithAt];
+        simp [EDist.edist];
+        simp ( config := { decide := Bool.true } ) [ PseudoMetricSpace.edist_dist, ENNReal.ofReal ];
+        norm_num [ ← ENNReal.coe_le_coe, Real.dist_eq ];
+        norm_cast;
+      contrapose! h_lip;
+      rw [ Metric.eventually_nhds_iff ];
+      field_simp;
+      intro ε ε_pos;
+      cases' lt_or_ge 0 x with hx hx;
+      -- Choose $x_1 = x ± \frac{\epsilon}{2}$
+      · use x + ε / 2;
+        norm_num [ abs_of_pos, hx, ε_pos ];
+        rw [ abs_of_nonneg ] <;> cases abs_cases ( x + ε / 2 ) <;> nlinarith [ show ( b : ℝ ) < 1 from h_lip ];
+      · use x - ε / 2;
+        simp;
+        exact ⟨ by linarith [ abs_of_pos ε_pos ], by cases abs_cases ( x - ε / 2 ) <;> cases abs_cases x <;> cases abs_cases ( |x - ε / 2| - |x| ) <;> nlinarith [ abs_of_pos (half_pos ε_pos) , show ( b : ℝ ) < 1 from h_lip ] ⟩
+
+end lipschitzAt
+
+/-- Map a value forward through a real function. If the real function isn't
+differentiable at a point, then we get the dummy value 0 for the uncertainty. -/
+@[irreducible]
+noncomputable def map (f : ℝ → ℝ) (x : FOBall) : FOBall :=
+  ⟨f x.mid,
+    open Classical in
+    if LipschitzAt f x.mid then (lipschitzAt f x.mid)^2 * x.var else 0⟩
+
+@[simp]
+theorem map_mid (f : ℝ → ℝ) (x : FOBall) : (map f x).mid = f x.mid := by
+  simp [map]
+
+@[simp]
+theorem map_pure (f : ℝ → ℝ) (x : ℝ) : map f (pure x) = ⟨f x, 0⟩ := by
+  ext <;> simp [map]
+
+theorem map_differentiableAt (f : ℝ → ℝ) (x : FOBall) (hf : DifferentiableAt ℝ f x.mid) :
+    map f x = ⟨f x.mid, ⟨(deriv f x.mid)^2, sq_nonneg _⟩ * x.var⟩ := by
+  rw [map, if_pos hf.LipschitzAt, hf.lipschitzAt_eq_deriv]
+  simp only [mk.injEq, mul_eq_mul_right_iff, true_and]
+  left; ext; simp
+
+@[simp]
+theorem map_differentiable (f : ℝ → ℝ) (x : FOBall) (hf : Differentiable ℝ f) :
+    map f x = ⟨f x.mid, ⟨(deriv f x.mid)^2, sq_nonneg _⟩ * x.var⟩ :=
+  map_differentiableAt f x hf.differentiableAt
+
+@[simp]
+theorem map_abs (x : FOBall) :
+    map abs x = ⟨abs x.mid, x.var⟩ := by
+  simp [map, abs_isLipschitzAt]
+
+noncomputable scoped instance : FunLike (ℝ → ℝ) FOBall FOBall where
+  coe f := FOBall.map f
+  coe_injective' _ _ h := by
+    funext x
+    simpa using congrFun h x
+
+/-- This simp lemma, arguably, makes things slightly harder to read: a simple coercion
+is turned into a `map f`. But frequently enough, I expect, the implicitness of this
+could confuse the reader, and make copying claims (e.g. for a `have`) harder. In this
+case, it seems better to encourage explicitness of the cast. -/
+@[simp]
+theorem funLike_eq_map (f : ℝ → ℝ) : (⇑f : FOBall → FOBall) = map f := by
+  rfl
+
+end map

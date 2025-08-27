@@ -204,13 +204,26 @@ instance : CharZero ℝRange where
     simp [NonemptyInterval.ext_iff]
 
 -- TODO
-instance : IsCancelMulZero ℝRange where
-  mul_left_cancel_of_ne_zero := sorry
-  mul_right_cancel_of_ne_zero := sorry
+proof_wanted isCancelMulZero : IsCancelMulZero ℝRange -- where
+--   mul_left_cancel_of_ne_zero := sorry
+--   mul_right_cancel_of_ne_zero := sorry
+
+theorem neg_ext (x : ℝ) (y : ℝRange) : x ∈ -y ↔ -x ∈ y := by
+  simp only [mem_def, NonemptyInterval.fst_neg, NonemptyInterval.snd_neg]
+  refine ⟨fun _ ↦ ⟨?_, ?_⟩, fun _ ↦ ⟨?_, ?_⟩⟩
+  all_goals linarith
+
+protected theorem neg_mul (x y : ℝRange) : -x * y = -(x * y) := by
+  apply SetLike.ext
+  intro x
+  simp_rw [mul_ext, neg_ext, mul_ext]
+  constructor
+  · exact fun ⟨a, ha, b, hb, hx⟩ ↦ ⟨-a, ha, b, hb, by simp [hx]⟩
+  · exact fun ⟨a, ha, b, hb, hx⟩ ↦ ⟨-a, (neg_neg a).symm ▸ ha, b, hb, by simp [← hx]⟩
 
 instance : HasDistribNeg ℝRange where
-  neg_mul := sorry
-  mul_neg := sorry
+  neg_mul := ℝRange.neg_mul
+  mul_neg _ _ := by rw [mul_comm, ℝRange.neg_mul, mul_comm]
 
 /- Normally the theorem `div_eq_mul_inv` is great, but here we need a special version because
 we're not a `DivInvMonoid`, for the reasons above. -/
@@ -262,26 +275,54 @@ def pureHom : MinimalRingHom ℝ ℝRange where
 
 /-! # Natural and integer powers -/
 
+--For mathlib
+theorem _root_.pow_left_antitoneOn_of_even {α : Type*}
+    [Ring α] [LinearOrder α] [ZeroLEOneClass α]
+    [PosMulMono α] [MulPosMono α] [AddLeftMono α]
+      {n : ℕ} (hn : Even n) :
+    AntitoneOn (· ^ n : α → α) (Set.Iic 0) := by
+  rw [even_iff_exists_two_mul] at hn
+  rcases hn with ⟨k, rfl⟩
+  intro x hx y hy hxy
+  simp only [pow_mul]
+  apply pow_left_monotoneOn (sq_nonneg y) (sq_nonneg x)
+  suffices (-y) ^ 2 ≤ (-x) ^ 2 by simpa
+  rw [Set.mem_Iic, ← neg_neg y, Left.neg_nonpos_iff] at hy
+  rw [← neg_le_neg_iff] at hxy
+  exact pow_le_pow_left₀ hy hxy 2
+
 def natPow (x : ℝRange) (n : ℕ) : ℝRange :=
   if h : Even n then
-    let lb := min (abs x.fst) (abs x.snd);
-    let ub := max (abs x.fst) (abs x.snd);
-    ⟨(lb ^ n, ub ^ n), sorry⟩
+    if h₂ : 0 ≤ x.fst then
+      ⟨⟨x.fst ^ n, x.snd ^ n⟩, pow_left_monotoneOn h₂ (h₂.trans x.2) x.2⟩
+    else if h₃ : x.snd ≤ 0 then
+      ⟨⟨x.snd ^ n, x.fst ^ n⟩, pow_left_antitoneOn_of_even h (le_of_not_ge h₂) h₃ x.2⟩
+    else if h₄ : n = 0 then
+      1
+    else
+      let ub := max (abs x.fst) (abs x.snd);
+      ⟨(0, ub ^ n), by positivity⟩
   else
-    ⟨⟨x.fst ^ n, x.snd ^ n⟩, sorry⟩
+    ⟨⟨x.fst ^ n, x.snd ^ n⟩, (Nat.not_even_iff_odd.mp h).pow_le_pow.mpr x.2⟩
 
 instance : NatPow ℝRange :=
   ⟨natPow⟩
 
 @[simp]
 theorem natPow_even_fst (x : ℝRange) {n : ℕ} (hn : Even n) :
-    (x ^ n).fst = (min (abs x.fst) (abs x.snd)) ^ n :=
-  congrArg Prod.fst <| congrArg NonemptyInterval.toProd (dif_pos hn)
+    (x ^ n).fst = if 0 ≤ x.fst then x.fst ^ n else if x.snd ≤ 0 then
+      x.snd ^ n else if n = 0 then 1 else 0 := by
+  change (NonemptyInterval.toProd (dite (Even n) _ _)).1 = _
+  rw [dif_pos hn]
+  split_ifs <;> rfl
 
 @[simp]
 theorem natPow_even_snd (x : ℝRange) {n : ℕ} (hn : Even n) :
-    (x ^ n).snd = (max (abs x.fst) (abs x.snd)) ^ n :=
-  congrArg Prod.snd <| congrArg NonemptyInterval.toProd (dif_pos hn)
+    (x ^ n).snd =  if 0 ≤ x.fst then x.snd ^ n else if x.snd ≤ 0
+      then x.fst ^ n else if n = 0 then 1 else (max (abs x.fst) (abs x.snd)) ^ n := by
+  change (NonemptyInterval.toProd (dite (Even n) _ _)).2 = _
+  rw [dif_pos hn]
+  split_ifs <;> rfl
 
 @[simp]
 theorem natPow_odd_fst (x : ℝRange) {n : ℕ} (hn : Odd n) :
@@ -293,16 +334,30 @@ theorem natPow_odd_snd (x : ℝRange) {n : ℕ} (hn : Odd n) :
     (x ^ n).snd = (x.snd) ^ n :=
   congrArg Prod.snd <| congrArg NonemptyInterval.toProd (dif_neg (Nat.not_even_iff_odd.mpr hn))
 
-/-- `natPow` coincides with the canonically lifted `map`. -/
-@[simp]
-theorem map_natPow (n : ℕ) : map (· ^ n) = (· ^ n) := by
-  sorry
+/- `natPow` coincides with the canonically lifted `map`. -/
+proof_wanted map_natPow (n : ℕ) : map (· ^ n) = (· ^ n)
+-- @[simp]
+-- theorem map_natPow (n : ℕ) : map (· ^ n) = (· ^ n) := by
+--   ext1 x
+--   rcases n.even_or_odd with hn | hn
+--   · if 0 ≤ x.fst then
+--       rename_i h₁
+--       rw [map_monotoneOn]
+--       · ext <;> simp_all
+--       · intro a ha b hb hab
+--         rw [SetLike.mem_coe, mem_def] at ha hb
+--         exact pow_left_monotoneOn (h₁.trans ha.1) (h₁.trans hb.1) hab
+--     else if x.snd ≤ 0 then
+--       sorry
+--     else
+--       sorry
+--   · sorry
+--
+-- @[simp]
+-- theorem coe_natPow (n : ℕ) : (⇑(· ^ n : ℝ → ℝ)) = (· ^ n) := by
+--   simp
 
-@[simp]
-theorem coe_natPow (n : ℕ) : (⇑(· ^ n : ℝ → ℝ)) = (· ^ n) := by
-  simp
-
---TODO appropriate `mem` lemmas
+--TODO appropriate `mem` lemmas for pow
 
 @[simp]
 protected theorem pow_zero (x : ℝRange) : x ^ 0 = 1 := by
@@ -315,30 +370,37 @@ protected theorem pow_one (x : ℝRange) : x ^ 1 = x := by
 --We prove `pow_mul`, but note that `pow_add` doesn't hold unless (1) both numbers are even,
 --or (2) the interval is entirely nonnegative.
 
-protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b) := by
-  rcases Nat.even_or_odd a with ha | ha
-  · rcases Nat.even_or_odd b with hb | hb
-    · have h₁ : abs (min |x.toProd.1| |x.toProd.2|) = min |x.toProd.1| |x.toProd.2| := by
-        simp
-      have h₂ : abs (max |x.toProd.1| |x.toProd.2|) = max |x.toProd.1| |x.toProd.2| := by
-        simp
-      ext
-      · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul, abs_pow]
-        rw [← Real.min_natPow (by positivity) (by positivity)]
-        simp [h₁, h₂]
-      · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul, abs_pow]
-        rw [← Real.max_natPow (by positivity) (by positivity)]
-        simp [h₁, h₂]
-    · ext <;> simp [ha, hb, pow_mul]
-  · rcases Nat.even_or_odd b with hb | hb
-    · ext
-      · simp [ha, hb, pow_mul]
-        rw [← Real.min_natPow (by positivity) (by positivity)]
-      · simp [ha, hb, pow_mul]
-        rw [← Real.max_natPow (by positivity) (by positivity)]
-    · ext <;> simp [ha, hb, pow_mul]
+proof_wanted pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b)
+-- protected theorem pow_mul (x : ℝRange) (a b : ℕ) : (x ^ a) ^ b = x ^ (a * b) := by
+--   rcases Nat.even_or_odd a with ha | ha
+--   · rcases Nat.even_or_odd b with hb | hb
+--     · have h₁ : abs (min |x.toProd.1| |x.toProd.2|) = min |x.toProd.1| |x.toProd.2| := by
+--         simp
+--       have h₂ : abs (max |x.toProd.1| |x.toProd.2|) = max |x.toProd.1| |x.toProd.2| := by
+--         simp
+--       ext
+--       · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul]
+--         -- rw [← Real.min_natPow (by positivity) (by positivity)]
+--         -- simp [h₁, h₂]
+--         sorry
+--       · simp only [hb, natPow_even_fst, natPow_even_snd, ha, Even.mul_left, pow_mul]
+--         -- rw [← Real.max_natPow (by positivity) (by positivity)]
+--         -- simp [h₁, h₂]
+--         sorry
+--     · by_cases ha₂ : a = 0
+--       · ext <;> simp [hb, ha₂]
+--       · ext <;> simp [ha, hb, pow_mul, zero_pow, Nat.ne_of_odd_add (n := 0) hb, ha₂]
+--   · rcases Nat.even_or_odd b with hb | hb
+--     · ext
+--       · simp [ha, hb, pow_mul]
+--         --rw [← Real.min_natPow (by positivity) (by positivity)]
+--         sorry
+--       · simp [ha, hb, pow_mul]
+--         --rw [← Real.max_natPow (by positivity) (by positivity)]
+--         sorry
+--     · ext <;> simp [ha, hb, pow_mul]
 
---TODO IntPow
+--TODO: IntPow
 
 /-
 Note: We don't want to mark `ℝRange.pure` as a `coe` because then we lose some of the control over

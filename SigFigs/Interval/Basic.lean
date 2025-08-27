@@ -27,8 +27,11 @@ instance : IntCast ℝRange :=
 instance : RatCast ℝRange :=
   ⟨(pure ·)⟩
 
-instance : Membership ℝ ℝRange :=
+instance : SetLike ℝRange ℝ :=
   inferInstance
+
+theorem mem_def (r : ℝRange) (x : ℝ) : x ∈ r ↔ r.fst ≤ x ∧ x ≤ r.snd := by
+  rfl
 
 @[simp]
 theorem fst_mem (x : ℝRange) : x.fst ∈ x := by
@@ -37,6 +40,10 @@ theorem fst_mem (x : ℝRange) : x.fst ∈ x := by
 @[simp]
 theorem snd_mem (x : ℝRange) : x.snd ∈ x := by
   simp [NonemptyInterval.mem_def, x.2]
+
+@[simp]
+theorem mem_pure (x y : ℝ) : x ∈ pure y ↔ x = y :=
+  NonemptyInterval.mem_pure
 
 theorem mem_ext_iff (x y : ℝRange) : x = y ↔ ∀ a, a ∈ x ↔ a ∈ y := by
   use (by simp [·])
@@ -105,9 +112,9 @@ theorem ofScientific_snd (m : ℕ) (sign : Bool) (e : ℕ) :
 example : (1.23 : ℝRange) = ⟨⟨1.225, 1.235⟩, by norm_num⟩ := by
   ext <;> norm_num
 
-macro n:term "ₑₓ" : term => `(pure $n)
+scoped macro n:term "ₑₓ" : term => `(pure $n)
 
-macro n:term "ᵤ" : term => `(($n : ℝRange))
+scoped macro n:term "ᵤ" : term => `(($n : ℝRange))
 
 @[app_unexpander ℝRange.pure] meta def unexpandPureScientific : Lean.PrettyPrinter.Unexpander
   | `($_ $tail) =>
@@ -116,7 +123,7 @@ macro n:term "ᵤ" : term => `(($n : ℝRange))
     | _          => `(↑$tail)
   | _ => throw ()
 
-macro n:term "±" pm:term : term => `((⟨⟨$n - $pm, $n + $pm⟩, by linarith⟩ : ℝRange))
+scoped macro n:term "±" pm:term : term => `((⟨⟨$n - $pm, $n + $pm⟩, by linarith⟩ : ℝRange))
 
 @[app_unexpander NonemptyInterval.mk] meta def unexpandPlusMinus : Lean.PrettyPrinter.Unexpander
   | `($_ ($a - $b, $c + $d) $_) => (if a == c && b == d then `($a±$b) else throw ())
@@ -273,7 +280,6 @@ theorem map_continuousMapClass [ContinuousMapClass F ℝ ℝ] (f : F) (x : ℝRa
 theorem map_continuousOn_eq_image {x : ℝRange} {f : ℝ → ℝ} (hf : ContinuousOn f x) :
     ↑(map f x) = f '' x := by
   rw [map_continuousOn x hf, eq_comm]
-  simp only [NonemptyInterval.setLike]
   apply eq_Icc_of_connected_compact
   · exact (isConnected_Icc x.2).image f hf
   · exact CompactIccSpace.isCompact_Icc.image_of_continuousOn hf

@@ -5,20 +5,39 @@ import Mathlib.MeasureTheory.Integral.IntervalIntegral.Basic
 import Mathlib.Probability.CDF
 import Mathlib.Probability.Distributions.Gaussian.Real
 
---Parsing examples
-#check (1.23 : ℝRange)
-#check (1.23ₑₓ : ℝRange)
-#check (1.23 + (Real.sqrt 7 : ℝ) : ℝRange)
+/-! # Examples of ℝRange usage, aka interval arithmetic.
+
+Without `open ℝRange`, we can use ℝRange if we explicitly name it, and decimal numbers
+can be parsed as ℝRange given the apppropriate type ascription:
+-/
+
+#check (1.23 : ℝRange) --when type-ascripted, the decimal is interpreted as an interval [1.225,1.235].
+#check (10.7 + 1.23 / Real.pi : ℝRange) --this can be mixed with exact reals and generally will work.
+#check 3.21 --note that this parses as a `Float` on its own!
+
+/- Now we `open ℝRange`, which offers some other convenient notations. -/
+open ℝRange
+
+#check (1.23 + (Real.sqrt 7 : ℝ) : ℝRange) --We can still use type ascription as a hint
 #check 1.23ᵤ -- u subscript for "uncertain"; `fooᵤ` elaborates the same as `(foo : ℝRange)`.
+
+--The `ₑₓ` subscript means "this number is actually exact". This parses the exact real number 123/100
+--and then casts it to the interval, giving [1.23,1.23].
+#check (1.23ₑₓ : ℝRange)
+
+--Scientific notation works with exponents too. Note the ascriptions means that the first number is
+--exact, [3e10,3e10], and the second is approximate with one digit of precision: [4.5e10, 5.5e10].
 #check (3e10 : ℝ) + (5e10 : ℝRange)
-#check 3e10ₑₓ + 5e10ᵤ --same as above
+#check 3e10ₑₓ + 5e10ᵤ --This is defeq to the above
+
+--The `open` also gives access to a ± notation.
 
 #check 7 ± 1
---Elaborates as x±2, even though we construct the interval "manually".
+--Elaborates as π±2, even though we construct the interval "manually".
 open Real in
-#check let x : ℝ := π; (⟨⟨x-2, x+2⟩, by linarith⟩ : ℝRange)
---Does not use ± notation because it's not a manifestly symmetric expression
-#check let x : ℝ := 37; (⟨⟨x-2, x+5⟩, by linarith⟩ : ℝRange)
+#check letI x : ℝ := π; (⟨⟨x-2, x+2⟩, by linarith⟩ : ℝRange)
+--Does not use ± notation because it's not a "manifestly" symmetric expression
+#check letI x : ℝ := 37; (⟨⟨x-2, x+5⟩, by linarith⟩ : ℝRange)
 
 example : 1.23ₑₓ = (123 / 100 : ℝ) := by
   ext <;> norm_num
@@ -175,7 +194,7 @@ example : EuropeanBlackScholesModel 100 100 1 0.05 0.20 ∈ 10.45ᵤ := by
 
 Problem: I measure the area of a circle to be 5.9m². What's the radius?
 
-Answer: idk
+Answer: 1.37m
 -/
 
 open Real in
@@ -272,19 +291,20 @@ small. This funlike instance is hidden behind the `ℝRange` scope.
 example : Real.sqrt (99 / 100 - 1.0) = 0 := by
   norm_num [Real.sqrt_eq_zero']
 
-/--
+/-
+If we didn't have `open ℝRange`, this would give the error:
+
 error: cannot coerce to function
   Real.sqrt
 -/
-#guard_msgs in
-example : ⇑Real.sqrt (99 / 100 - 1.0) ≠ 0 := by --no `open ℝRange`, no coercion to find.
-  sorry
+-- #guard_msgs in
+-- example : ⇑Real.sqrt (99 / 100 - 1.0) ≠ 0 := by --no `open ℝRange`, no coercion to find.
+--   sorry
 
-open ℝRange in --now it works
 example : ⇑Real.sqrt (99 / 100 - 1.0) ≠ 0 := by
   intro h
   rw [show (99 / 100) = pure 0.99 by norm_num] at h
-  simp [NonemptyInterval.ext_iff, Prod.ext_iff, map_Monotone Real.sqrt_mono] at h
+  simp [NonemptyInterval.ext_iff, Prod.ext_iff, map_monotone Real.sqrt_monotone] at h
   norm_num at h
 
 /-
@@ -294,17 +314,15 @@ as opposed to `map f x`. Accordingly, the `9.0` is parsed as a real. If instead 
 a ℝRange as the argument, Lean would complain with `Application type mismatch`. We
 have to add the `⇑` explicitly.
 
-(This example is unprovable, it evaluates to `[2.95,3.05] = [3,3]`.)
+This example is provable! It evaluates to `[2.95,3.05] ≠ [3,3]`.
 -/
-open ℝRange in
-example : 3.0 = (Real.sqrt 9.0 : ℝRange) := by
+example : 3.0 ≠ (Real.sqrt 9.0 : ℝRange) := by
   sorry
 
 /- You can avoid the ⇑ if you explicitly give a type ascription, this works too.
 If we didn't `open ℝRange`, this would give a `type mismatch` error.
 
-(This example is also unprovable: it evaluates to `[2.95,3.05] = [√8.95,√9.05]`.)
+This example is also provable: it evaluates to `[2.95,3.05] ≠ [√8.95,√9.05]`.
 -/
-open ℝRange in
-example : 3.0 = (Real.sqrt : ℝRange → ℝRange) 9.0 := by
+example : 3.0 ≠ (Real.sqrt : ℝRange → ℝRange) 9.0 := by
   sorry

@@ -102,5 +102,3 @@ initialize_simps_projections MinimalRingHom (toFun → apply)
 end MinimalRingHom
 
 end MinimalRing
-
-#find_home Real.sqrt_monotone

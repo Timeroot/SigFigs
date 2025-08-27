@@ -49,6 +49,7 @@ variable (r s : SigFig) (x y : ℝ) (e : ℤ)
 
 section rounding
 
+
 /-- Round a SigFig to a given precision. Rounding is done with `round`, which always
 rounds `n + 1/2` to `n + 1`. This is not generally a sensible function to use unless
 `s.e < e`, as otherwise you are "increasing the precision" of a number. -/
@@ -67,6 +68,10 @@ theorem roundTo_e (s : SigFig) (e : ℤ) : (s.roundTo e).e = e := by
 theorem roundTo_self (s : SigFig) : (s.roundTo s.e) = s := by
   simp [roundTo]
 
+@[simp]
+def toRat (s : SigFig) : ℚ :=
+  s.m * 10 ^ s.e
+
 /-- Convert a real number to a `SigFig` at a given level of precision. Uses `round`, which rounds
 half-integers up. -/
 noncomputable def ofReal (x : ℝ) (e : ℤ) : SigFig where
@@ -80,7 +85,31 @@ theorem ofReal_m : (ofReal x e).m = round (x * 10 ^ e) := by
 theorem ofReal_e : (ofReal x e).e = e := by
   rfl
 
+@[simp]
+theorem toRat_ofReal (x : ℝ) : (ofReal x 0).toRat = round x := by
+  simp [ofReal]
+
 end rounding
+
+section ofScientific
+
+def ofScientific (m : ℕ) (sign : Bool) (e : ℕ) : SigFig :=
+  ⟨m, if sign then -e else e⟩
+
+instance : OfScientific SigFig where
+  ofScientific := ofScientific
+
+@[simp]
+theorem ofScientific_m (m : ℕ) (sign : Bool) (e : ℕ) :
+    (OfScientific.ofScientific m sign e : SigFig).m = m := by
+  rfl
+
+@[simp]
+theorem ofScientific_e (m : ℕ) (sign : Bool) (e : ℕ) :
+    (OfScientific.ofScientific m sign e : SigFig).e = (if sign then -e else e : ℤ) := by
+  rfl
+
+end ofScientific
 
 section add
 
@@ -246,7 +275,8 @@ abbrev prec (r : SigFig) : ℕ := prec_int r.m
 theorem prec_def (r : SigFig) : r.prec = if r.m = 0 then 0 else 1 + Nat.log 10 r.m.natAbs :=
   rfl
 
-/-- Round a sigfig to a given precision. A naive implementation would be
+/-- Round a sigfig to the nearest value with the given relative precision.
+A naive implementation would be
 ```lean4
 let δe := r.prec - p;
   ⟨round (r.m / 10 ^ δe : ℚ), r.e + δe⟩
@@ -263,17 +293,23 @@ def toPrec (r : SigFig) (p : ℕ) : SigFig :=
   let δ'e : ℤ := r'.prec - p;
     ⟨round (r'.m / 10 ^ δ'e : ℚ), r'.e + δ'e⟩
 
+example : toPrec ⟨94, -1⟩ 1 = ⟨9, 0⟩ ∧ toPrec ⟨95, -1⟩ 1 = ⟨1, 1⟩ := by
+  -- norm_num [toPrec] --TODO: NormNum extension for `round ℚ`?
+  native_decide
+
 @[simp]
 theorem toPrec_self (r : SigFig) : r.toPrec r.prec = r := by
   ext <;> simp [toPrec]
 
-@[simp]
-theorem toPrec_prec (r : SigFig) (p : ℕ) : (r.toPrec p).prec = p := by
-  sorry
+--TODO
+-- @[simp]
+-- theorem toPrec_prec (r : SigFig) (p : ℕ) : (r.toPrec p).prec = p := by
+--   sorry
 
-@[simp]
-theorem toPrec_zero (r : SigFig) : (r.toPrec 0).m = 0 := by
-  sorry
+--TODO
+-- @[simp]
+-- theorem toPrec_zero (r : SigFig) : (r.toPrec 0).m = 0 := by
+--   sorry
 
 /-- **Multiplication** is carried out by:
  * Multiplying the mantissas (as integers)
@@ -289,11 +325,12 @@ instance : Mul SigFig :=
 theorem mul_def (r s : SigFig) : r * s = toPrec ⟨r.m * s.m, r.e + s.e⟩ (min r.prec s.prec) :=
   rfl
 
-/-- Convert a real number to a `SigFig` at a given precision. Note that `0` will never have preicision,
-so it defaults to just `ofReal 0 p`, which has `p` digits of absolute precision but no well-defined
+/-- Convert a real number to a `SigFig` at a given relative precision.
+Note that `0` can never have any relative precision, so it defaults to just
+`ofReal 0 p`, which has `p` digits of absolute precision but no well-defined
 relative precision.
 
-TODO: This might need some tweaking to get the rounding correct. -/
+TODO: This might need some tweaking to get the rounding entirely optimal. -/
 noncomputable def ofReal_prec (x : ℝ) (p : ℤ) : SigFig :=
   if x = 0 then ofReal 0 p
   else ⟨round (x * 10 ^ (p - Int.log 10 |x|) : ℝ), p - Int.log 10 |x|⟩
@@ -317,12 +354,34 @@ theorem real_hMul : x * r = r * x := by
 theorem hMul_real_def : r * x = r * ofReal_prec x r.prec := by
   rfl
 
-@[simp]
-theorem mul_one : r * 1 = r := by
-  sorry
+theorem mul_zero : r * 0 = ⟨0, r.e + r.prec⟩ := by
+  rcases r with ⟨m, e⟩
+  simp [hMul_real_def, ofReal_prec, ofReal, mul_def, toPrec]
 
-theorem one_mul : 1 * r = r := by
-  simp
+theorem zero_mul : 0 * r = ⟨0, r.e + r.prec⟩ := by
+  simp [mul_zero]
+
+@[simp]
+theorem mul_zero_m : (r * 0).m = 0 := by
+  simp [mul_zero]
+
+@[simp]
+theorem mul_zero_e : (r * 0).e = r.e + r.prec := by
+  simp [mul_zero]
+
+--TODO prove
+-- @[simp]
+-- theorem mul_one : r * 1 = r := by
+--   rcases r with ⟨m, e⟩
+--   simp [hMul_real_def, mul_def, ofReal_prec]
+--   split_ifs with h₁ h₂
+--   · norm_num at h₂
+--   · simp [h₁, toPrec]
+--   · sorry
+--   · sorry
+--
+-- theorem one_mul : 1 * r = r := by
+--   simp
 
 /-! We don't have `HasDistribNeg`, because:
 ```
