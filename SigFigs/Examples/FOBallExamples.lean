@@ -13,6 +13,39 @@ functions by evaluating at the midpoint, and scaling derivatives to scale uncert
 This is, often, what scientists mean by "uncertainty propagation".
 -/
 
+section parsing
+
+/- Like ℝRange, we can infer this from decimals or from a `±` notation. We need to
+`open scoped FOBall` to get the latter notation accessible. -/
+open scoped FOBall
+
+#check 1 ± 157 --A very vague number, indicating a "measurement" of 1 with an uncertainty of
+               --157 in that reading.
+
+#check (1.5 : FOBall) --Equivalent to `1.5 ± 0.05`
+#check (15e-1 : FOBall) --The same as the above
+#check (1.50 : FOBall) --This is higher precision, meaning `1.5 ± 0.005`.
+#check (150e3 : FOBall) --Equivalent to `150000 ± 500`.
+#check (15 : FOBall) --Equivalent to `15 ± 0`. This is a precise quantity!
+#check (Real.pi : FOBall) -- Similarly, any real can be cast to a precise quantity.
+
+--Without anything noted as an FOBall, the `3.5` parses as a Float or Real. The resulting
+--quantity is not an approximate quantity.
+#check 3.5 + Real.pi
+
+--Now the right term is an FOBall (because of the ± notation),
+--so 3.5 on the left parses as an FOBall too.
+#check 3.5 + (5 ± 1)
+
+--Here `x` is the precise number `Pi`, but then cast to an FOBall. This causes the
+--number 6.7 to also parse as an FOBall. The parenthesized quantity is then equal to
+--`(67/100 + 7π) ± 0.05`. We can apply the lifted version of `Real.sin` to this
+--uncertain expression to get some nonlinear estimate with uncertainty (more on function
+--application below).
+#check (letI x : FOBall := Real.pi; ⇑Real.sin (7 * x + 6.7))
+
+end parsing
+
 /-! # Example physics problem
 
 Example problem: you drop a ball from a height of 150.0m.
@@ -66,13 +99,24 @@ example (g t height : FOBall) (hg : g = 9.8) (ht : t = 5.18) (h_height : height 
   subst g t height
   norm_num [FOBall.mem_def, pow_two]
 
-/-- This version says 19 is consistent, and the variance is in the first digit after
-the decimal point. A TODO item is writing a better notation for this, like `≈` for
-interval arithmetic.
+open scoped FOBall in --for the ± notation
+/-- This version says 19 is consistent, and that the given uncertainty (of ±1) is "roughly"
+right - within a factor of 4. See `FOBall.isApprox`, and the corresponding interval example,
+for some more on this form.
+
+The right-hand side could also have been written as  `⟨19, 1⟩` (which would be equal to
+`19±1`).
+
+Other correct answers would be `1.9e1`, `19e0`, `⟨19, 0.25⟩`. These are
+all equal and have uncertainties of ±0.5.
+
+Writing `19` on the RHS would be wrong (since it has zero uncertainty and so would imply
+exact equality). Writing `19.0` would imply an uncertainty of `0.05` instead of `0.5`, and
+also be wrong.
 -/
 example (g t height : FOBall) (hg : g = 9.8) (ht : t = 5.18) (h_height : height = 150.0)
   (ans : FOBall) (h_ans : ans = height - (1/2) * g * t^2)
-  : 19 ∈ ans ∧ 0.1 ≤ √ans.var ∧ √ans.var ≤ 1 := by
+  : ans ≈ 19±1 := by
   sorry
 
 /-! # Example Calculus Problem
@@ -90,7 +134,6 @@ below, and it's logically equivalent to the interval version, but this is certai
 an **incorrect** formalization. -/
 example : ∫ x in 0..1, (1 + x) / (1 + x^2) ∈ (1.132 : FOBall) := by
   sorry
-
 
 /-! # Mapping functions
 
@@ -133,7 +176,8 @@ open scoped FOBall in
 example : Real.sqrt 3.5 = 1776 := by
   sorry
 
-/- Here's an actual true example: `log (1±0.5) = 0±0.5`. -/
+/- Here's an actual true example: `log (1±0.5) = 0±0.5`. The uncertainty stays the same
+because the derivative of `Real.log` at 1 is itself 1, so there's no scaling involed. -/
 open scoped FOBall in
 example : ⇑Real.log 1e0 = ⟨0, 1/4⟩ := by
   ext

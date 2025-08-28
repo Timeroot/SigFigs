@@ -391,6 +391,9 @@ theorem ofScientific_e (m : ℕ) (sign : Bool) (e : ℕ) :
 
 end ofScientific
 
+/-- The `a ± b` notation parses as `p` with `p.mid = a` and `p.var = b^2`. -/
+scoped macro n:term "±" pm:term : term => `((⟨$n, ⟨$pm ^ 2, sq_nonneg $pm⟩⟩ : FOBall))
+
 section setlike
 
 /-- Interpreting an `FOBall` as a confidence interval, is the given value
@@ -663,3 +666,82 @@ theorem funLike_eq_map (f : ℝ → ℝ) : (⇑f : FOBall → FOBall) = map f :=
   rfl
 
 end map
+
+section approx
+
+/-- **Approximate equality of FOBalls**. See `ℝRange.isApprox` for some elaboration
+on what this means, what it doesn't, and why this definition was chosen. -/
+def isApprox (x y : FOBall) : Prop :=
+  |x.mid - y.mid| ≤ √x.var + √y.var ∧ y.var ≤ 16 * x.var ∧ x.var ≤ 16 * y.var
+
+instance : HasEquiv FOBall :=
+  ⟨isApprox⟩
+
+/-- The provided definition of `isApprox`, which is most directly comparable to
+`ℝRange.isApprox`. -/
+theorem isApprox_def (x y : FOBall) : x ≈ y ↔
+    |x.mid - y.mid| ≤ √x.var + √y.var ∧ y.var ≤ 16 * x.var ∧ x.var ≤ 16 * y.var := by
+  rfl
+
+/-- A logically equivalent definition of `isApprox` that avoids square roots, more
+amenable to numerical verification. -/
+@[simp]
+theorem isApprox_iff (x y : FOBall) : x ≈ y ↔
+    (|x.mid - y.mid|^2 ≤ x.var + y.var ∨
+      (|x.mid - y.mid|^2 - x.var - y.var)^2 ≤ 4 * x.var * y.var) ∧
+      (y.var ≤ 16 * x.var ∧ x.var ≤ 16 * y.var) := by
+  rw [isApprox_def, and_congr_left_iff]
+  intro h; clear h
+  congr!
+  constructor
+  · intro h
+    by_cases h₂ : |x.mid - y.mid| ^ 2 ≤ x.var + y.var
+    · exact .inl h₂
+    push_neg at h₂
+    rcases x with ⟨xm, xv⟩
+    rcases y with ⟨ym, yv⟩
+    dsimp at h h₂ ⊢
+    -- Since $|xm - ym| \leq \sqrt{xv} + \sqrt{yv}$, squaring both sides gives $|xm - ym|^2 \leq (\sqrt{xv} + \sqrt{yv})^2$.
+    have h_sq : |xm - ym|^2 ≤ (Real.sqrt xv + Real.sqrt yv)^2 := by
+      gcongr;
+    -- If $|xm - ym|^2 > xv + yv$, then $|xm - ym|^2 - xv - yv \leq 2\sqrt{xv yv}$.
+    have h_diff : |xm - ym|^2 - xv - yv ≤ 2 * Real.sqrt (xv * yv) := by
+      rw [ Real.sqrt_mul ] <;> nlinarith [ Real.mul_self_sqrt ( show 0 ≤ ( xv : ℝ ) by positivity ), Real.mul_self_sqrt ( show 0 ≤ ( yv : ℝ ) by positivity ) ];
+    -- Squaring both sides of $|xm - ym|^2 - xv - yv \leq 2\sqrt{xv yv}$, we get $(|xm - ym|^2 - xv - yv)^2 \leq 4xv yv$.
+    have h_diff_sq : (|xm - ym|^2 - xv - yv)^2 ≤ (2 * Real.sqrt (xv * yv))^2 := by
+      exact pow_le_pow_left₀ ( by linarith ) h_diff 2;
+    exact Or.inr ( le_trans h_diff_sq ( by nlinarith only [ Real.mul_self_sqrt ( mul_nonneg ( NNReal.coe_nonneg xv ) ( NNReal.coe_nonneg yv ) ) ] ) )
+  · intro h
+    rcases x with ⟨xm, xv⟩
+    rcases y with ⟨ym, yv⟩
+    dsimp at h ⊢
+    -- Let's split into the two cases from h.
+    cases' h with h_case1 h_case2;
+    -- Case 1
+    · nlinarith [ Real.sqrt_nonneg xv, Real.sqrt_nonneg yv, Real.mul_self_sqrt ( show 0 ≤ ( xv : ℝ ) by positivity ), Real.mul_self_sqrt ( show 0 ≤ ( yv : ℝ ) by positivity ) ];
+    -- Case 2
+    · -- Taking the square root of both sides of the inequality from Case 2.
+      have h_sqrt_case2 : |xm - ym|^2 ≤ (xv : ℝ) + (yv : ℝ) + 2 * Real.sqrt ((xv : ℝ) * (yv : ℝ)) := by
+        nlinarith [ Real.sqrt_nonneg ( xv * yv : ℝ ), Real.mul_self_sqrt ( by positivity : 0 ≤ ( xv : ℝ ) * yv ) ];
+      rw [ Real.sqrt_mul ] at h_sqrt_case2;
+      -- Case 1
+      · nlinarith only [ h_sqrt_case2, Real.sqrt_nonneg ( xv : ℝ ), Real.sqrt_nonneg ( yv : ℝ ), Real.mul_self_sqrt ( NNReal.coe_nonneg xv ), Real.mul_self_sqrt ( NNReal.coe_nonneg yv ) ];
+      -- Case 2
+      · positivity
+
+instance : IsRefl FOBall (· ≈ ·) where
+  refl x := by simp [← NNReal.coe_le_coe]; linarith [x.var.coe_nonneg]
+
+instance : IsSymm FOBall (· ≈ ·) where
+  symm x y h := by
+    rw [isApprox_iff] at h ⊢
+    convert h using 1
+    · congr! 2
+      · rw [abs_sub_comm]
+      · exact add_comm _ _
+      · rw [abs_sub_comm]
+        ring_nf
+      · ring_nf
+    · tauto
+
+end approx
