@@ -134,16 +134,16 @@ scoped macro n:term "±" pm:term : term => `((⟨⟨$n - $pm, $n + $pm⟩, by li
 --`pure_zero`, `pure_one`, `pure_natCast`, `pure_add_pure` are already simp'ed in `NonemptyInterval`.
 
 theorem pure_zero : (pure (0 : ℝ)) = (0 : ℝRange) := by
-  simp says simp only [NonemptyInterval.pure_zero]
+  simp? says simp only [NonemptyInterval.pure_zero]
 
 theorem pure_one : (pure (1 : ℝ)) = (1 : ℝRange) := by
-  simp says simp only [NonemptyInterval.pure_one]
+  simp? says simp only [NonemptyInterval.pure_one]
 
 theorem pure_natCast (n : ℕ) : pure (n : ℝ) = n := by
-  simp says simp only [NonemptyInterval.pure_natCast]
+  simp? says simp only [NonemptyInterval.pure_natCast]
 
 theorem pure_add_pure (x y : ℝ) : pure (x + y) = x + y := by
-  simp says simp only [NonemptyInterval.pure_add_pure]
+  simp? says simp only [NonemptyInterval.pure_add_pure]
 
 @[simp]
 theorem pure_ofNat (n : ℕ) [n.AtLeastTwo] :
