@@ -37,6 +37,8 @@ example (A B : ℝRange) (hA : A = 100 ± 3) (hB : B = 30 ± 15) :
 
 The third goal is to make the package reasonably useful for actually carrying out these calculations. When only field operations are used, all numbers remain rational and Lean's `norm_num` tactic can be used to evaluate the expressions. A significant next goal would be integrating [ComputableReal](https://github.com/Timeroot/ComputableReal) and/or Geoffrey Irving's [interval](https://github.com/girving/interval/) packages to allow for mostly automatic evaluation of expressions involving square roots, exponentation, or trigonometric functions.
 
+The most complete tutorial is in the example files, one for [ℝRange](SigFigs/Examples/IntervalExamples.lean), one for [FOBall](SigFigs/Examples/FOBallExamples.lean). It remains to write one for the Significant Figures model.
+
 ## Contributing
 
 We welcome contributions. Currently the goals would be, in order of priority:
