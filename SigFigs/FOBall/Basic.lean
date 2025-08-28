@@ -468,154 +468,128 @@ noncomputable def lipschitzAt {X Y : Type*} [TopologicalSpace X] [EDist X] [EDis
     (f : X → Y) (p : X) : NNReal :=
   sInf {C | LipschitzWithAt C f p}
 
+theorem LipschitzWithAt.lipschitzAt {X Y : Type*} [TopologicalSpace X] [EDist X] [EDist Y]
+    {C : NNReal} {f : X → Y} {p : X} (hf : LipschitzWithAt C f p) : LipschitzAt f p :=
+  ⟨C, hf⟩
+
 @[simp]
 theorem _root_.DifferentiableAt.LipschitzAt {f : ℝ → ℝ} {x : ℝ} (hf : DifferentiableAt ℝ f x) :
     LipschitzAt f x := by
-  obtain ⟨w, h⟩ : ∃ C : ℝ, ∀ᶠ z in nhds x, |f z - f x| ≤ C * |z - x| := by
-    -- Since $f$ is differentiable at $x$, we have $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$.
-    have h_deriv : Filter.Tendsto (fun z => (f z - f x) / (z - x)) (nhdsWithin x {x}ᶜ) (nhds (deriv f x)) := by
+  obtain ⟨w, h⟩ : ∃ C : ℝ, ∀ᶠ z in 𝓝 x, |f z - f x| ≤ C * |z - x| := by
+    -- Since f is differentiable at x, we have lim_{z → x} (f(z) - f(x)) / (z - x) = f'(x).
+    have h_deriv : (𝓝[≠] x).Tendsto (fun z => (f z - f x) / (z - x)) (𝓝 (deriv f x)) := by
       simpa [hasDerivAt_iff_tendsto_slope, div_eq_inv_mul] using hf.hasDerivAt
-    -- Since the limit of the difference quotient is $f'(x)$, we can find a neighborhood around $x$ where the absolute value of the difference quotient is bounded by $|f'(x)| + 1$.
-    obtain ⟨C, hC⟩ : ∃ C : ℝ, ∀ᶠ z in nhdsWithin x {x}ᶜ, |(f z - f x) / (z - x)| ≤ C := by
-      exact ⟨_, h_deriv.abs.eventually (ge_mem_nhds <| lt_add_one _)⟩
-    -- Since $|(f z - f x) / (z - x)| \leq C$ for $z \neq x$, multiplying both sides by $|z - x|$ gives
-    -- $|f z - f x| \leq C * |z - x|$ for $z \neq x$. For $z = x$, $|f z - f x| = 0 \leq C * |z - x|$ trivially.
+    obtain ⟨C, hC⟩ : ∃ C : ℝ, ∀ᶠ z in (𝓝[≠] x), |(f z - f x) / (z - x)| ≤ C :=
+      ⟨_, h_deriv.abs.eventually (ge_mem_nhds <| lt_add_one _)⟩
+    -- Since |(f z - f x) / (z - x)| ≤ C for z ≠ x, multiplying both sides by |z - x| gives
+    -- |f z - f x| ≤ C * |z - x| for z ≠ x. For z = x, |f z - f x| = 0 ≤ C * |z - x| trivially.
     use C
-    have : ∀ᶠ z in nhds x, z ≠ x → |f z - f x| ≤ C * |z - x| := by
+    have hl : ∀ᶠ z in 𝓝 x, z ≠ x → |f z - f x| ≤ C * |z - x| := by
       rw [eventually_nhdsWithin_iff] at hC
-      filter_upwards [hC] with z hz hzx using by
-        simpa only [abs_div, div_le_iff₀ (abs_pos.mpr (sub_ne_zero.mpr hzx))] using hz hzx
-    filter_upwards [this] with z hz using if h : z = x then by simp [h] else hz h
+      filter_upwards [hC] with z hz hzx
+      simpa only [abs_div, div_le_iff₀ (abs_pos.mpr (sub_ne_zero.mpr hzx))] using hz hzx
+    filter_upwards [hl] with z hz using if h : z = x then by simp [h] else hz h
   use ⟨|w|, by positivity⟩
   filter_upwards [h] with z hz
-  exact ENNReal.coe_le_coe.mpr (by
-    simpa [abs_mul] using hz.trans (mul_le_mul_of_nonneg_right (le_abs_self _) (abs_nonneg _)))
+  apply ENNReal.coe_le_coe.mpr
+  simpa [abs_mul] using hz.trans (mul_le_mul_of_nonneg_right (le_abs_self _) (abs_nonneg _))
 
 /-- For differentiable functions, the lipschitz constant at a point is the absolute
 value of the derivative. -/
 @[simp]
 theorem _root_.DifferentiableAt.lipschitzAt_eq_deriv {f : ℝ → ℝ} {x : ℝ} (hf : DifferentiableAt ℝ f x) :
     lipschitzAt f x = ‖deriv f x‖₊ := by
-  ext
-  simp only [coe_nnnorm, Real.norm_eq_abs]
-    -- Suppose $C > |f'(x)|$. We need to show that $f$ is $C$-Lipschitz at $x$.
-  have h_C_lipschitz : ∀ (C : NNReal), (C > abs (deriv f x)) → (LipschitzWithAt C f x) := by
-    -- By definition of the derivative, we know that $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$.
-    have h_deriv : Filter.Tendsto (fun z => (f z - f x) / (z - x)) (nhdsWithin x {x}ᶜ) (nhds (deriv f x)) := by
-      -- By definition of the derivative, we know that $\lim_{z \to x} \frac{f(z) - f(x)}{z - x} = f'(x)$ follows directly from the fact that $f$ is differentiable at $x$.
-      have h_deriv : HasDerivAt f (deriv f x) x := by
-        exact hf.hasDerivAt;
-      rw [ hasDerivAt_iff_tendsto_slope ] at h_deriv;
-      simpa [ div_eq_inv_mul ] using h_deriv;
+  simp only [NNReal.eq_iff, coe_nnnorm, Real.norm_eq_abs]
+  have h_C_lipschitz : ∀ (C : NNReal), C > |deriv f x| → LipschitzWithAt C f x := by
+    have h_deriv : (𝓝[≠] x).Tendsto (fun z ↦ (f z - f x) / (z - x)) (𝓝 (deriv f x)) := by
+      simpa [hasDerivAt_iff_tendsto_slope, div_eq_inv_mul] using hf.hasDerivAt
     intro C hC
-    have h_bound : ∀ᶠ z in nhdsWithin x {x}ᶜ, abs ((f z - f x) / (z - x)) ≤ C := by
-      have := h_deriv.abs;
-      exact this.eventually ( ge_mem_nhds hC );
-    rw [ eventually_nhdsWithin_iff ] at h_bound;
-    filter_upwards [ h_bound ] with y hy;
-    by_cases h : y = x <;> simp_all ( config := { decide := Bool.true } ) [ edist_dist, abs_div ];
-    rw [ ← ENNReal.ofReal_coe_nnreal ];
-    rw [ ← ENNReal.ofReal_mul ( by positivity ), div_le_iff₀ ( abs_pos.mpr ( sub_ne_zero.mpr h ) ) ] at * ;
-    simp_all only [dist_pos, ne_eq, not_false_eq_true, mul_nonneg_iff_of_pos_right, NNReal.zero_le_coe,
-      ENNReal.ofReal_le_ofReal_iff]
-    exact hy
-  refine' le_antisymm _ _;
-  -- Case 1
-  · -- Fix any $C > |f'(x)|$.
-    by_contra h_contra;
-    -- Since $|f'(x)| < C$, we can choose $C$ such that $|f'(x)| < C$.
-    obtain ⟨C, hC⟩ : ∃ C : NNReal, |deriv f x| < C ∧ C < lipschitzAt f x := by
-      exact ⟨ ⟨ ( |deriv f x| + ↑ ( lipschitzAt f x ) ) / 2, by positivity ⟩, by norm_num; linarith, by exact NNReal.coe_lt_coe.mp ( by norm_num; linarith ) ⟩;
-    exact hC.2.not_ge <| csInf_le ⟨ 0, fun C hC => by positivity ⟩ <| h_C_lipschitz C hC.1;
-  -- Case 2
-  · -- Suppose $C < |f'(x)|$. We need to show that $f$ is not $C$-Lipschitz at $x$.
-    have h_not_C_lipschitz : ∀ (C : NNReal), (C < abs (deriv f x)) → ¬(LipschitzWithAt C f x) := by
-      -- By definition of Lipschitz continuity, if $f$ is $C$-Lipschitz at $x$, then for all $y$ near $x$, we have $|f(y) - f(x)| \leq C |y - x|$.
+    have h_bound : ∀ᶠ z in 𝓝[≠] x, |(f z - f x) / (z - x)| ≤ C :=
+      h_deriv.abs.eventually (ge_mem_nhds hC)
+    rw [eventually_nhdsWithin_iff] at h_bound
+    filter_upwards [h_bound] with y hy
+    by_cases h : y = x
+    · simp [h]
+    simp [edist_dist, abs_div] at hy ⊢
+    rw [div_le_iff₀ (abs_pos.mpr (sub_ne_zero.mpr h))] at hy
+    rw [← ENNReal.ofReal_coe_nnreal, ← ENNReal.ofReal_mul (by positivity),
+      ENNReal.ofReal_le_ofReal_iff (by positivity)]
+    exact hy h
+  apply le_antisymm
+  · by_contra h_contra
+    obtain ⟨C, hC⟩ : ∃ C : ℝ≥0, |deriv f x| < C ∧ C < lipschitzAt f x :=
+      ⟨⟨(|deriv f x| + lipschitzAt f x) / 2, by positivity⟩,
+        by norm_num; linarith,
+        NNReal.coe_lt_coe.mp (by norm_num; linarith)⟩
+    exact hC.2.not_ge <| csInf_le ⟨0, fun C hC ↦ by positivity⟩ <| h_C_lipschitz C hC.1
+  · -- Suppose C < |f'(x)|. We need to show that f is not C-Lipschitz at x.
+    have h_not_C_lipschitz : ∀ (C : ℝ≥0), C < |deriv f x| → ¬LipschitzWithAt C f x := by
       intro C hC_lt
       by_contra h_contra
-      obtain ⟨ε, hε_pos, hε⟩ : ∃ ε > 0, ∀ y, abs (y - x) < ε → abs (f y - f x) ≤ C * abs (y - x) := by
-        rcases Metric.mem_nhds_iff.mp h_contra with ⟨ ε, ε_pos, hε ⟩;
-        -- Since Metric.ball x ε is the set of points within ε distance from x, we can use the same ε from hε.
-        use ε, ε_pos;
-        simp_all ( config := { decide := Bool.true } ) [ edist_dist ];
-        intro y hy;
-        specialize hε hy;
-        rw [ Set.mem_setOf_eq ] at hε;
-        rw [ ENNReal.ofReal_le_iff_le_toReal ] at hε
-        -- Case 1
-        · simp_all only [ENNReal.toReal_mul, ENNReal.coe_toReal]
-          simpa [ Real.dist_eq, ENNReal.toReal_ofReal ( abs_nonneg _ ) ] using hε;
-        -- Case 2
-        · simp_all only [ne_eq]
-          apply Aesop.BuiltinRules.not_intro
-          intro a
-          simp_all only [le_top]
-          rw [ ENNReal.mul_eq_top ] at a;
-          aesop;
-      -- Taking the limit as $y$ approaches $x$, we get $|f'(x)| \leq C$.
-      have h_lim : Filter.Tendsto (fun y => abs ((f y - f x) / (y - x))) (nhdsWithin x {x}ᶜ) (nhds (abs (deriv f x))) := by
-        have := hf.hasDerivAt;
-        rw [ hasDerivAt_iff_tendsto_slope ] at this;
-        simpa [ div_eq_inv_mul ] using this.abs;
-      have h_lim_le : ∀ᶠ y in nhdsWithin x {x}ᶜ, abs ((f y - f x) / (y - x)) ≤ C := by
-        filter_upwards [ self_mem_nhdsWithin, mem_nhdsWithin_of_mem_nhds ( Metric.ball_mem_nhds x hε_pos ) ] with y hy hy' using by
-          rw [ abs_div ];
-          exact div_le_of_le_mul₀ ( abs_nonneg _ ) ( by positivity ) ( hε y hy' )
+      obtain ⟨ε, hε_pos, hε⟩ : ∃ ε > 0, ∀ y, |y - x| < ε → |f y - f x| ≤ C * |y - x| := by
+        rcases Metric.mem_nhds_iff.mp h_contra with ⟨ε, ε_pos, hε⟩;
+        use ε, ε_pos
+        simp_all [edist_dist]
+        intro y hy
+        specialize hε hy
+        rw [Set.mem_setOf_eq, ENNReal.ofReal_le_iff_le_toReal] at hε
+        · simpa [ENNReal.toReal_mul, ENNReal.coe_toReal, Real.dist_eq,
+            ENNReal.toReal_ofReal (abs_nonneg _)] using hε
+        · simp_all [ENNReal.mul_eq_top]
+      have h_lim : (𝓝[≠] x).Tendsto (fun y ↦ |(f y - f x) / (y - x)|) (𝓝 |deriv f x|) := by
+        have hd := hf.hasDerivAt
+        rw [hasDerivAt_iff_tendsto_slope] at hd
+        simpa [div_eq_inv_mul] using hd.abs
+      have h_lim_le : ∀ᶠ y in (𝓝[≠] x), |(f y - f x) / (y - x)| ≤ C := by
+        filter_upwards [self_mem_nhdsWithin, mem_nhdsWithin_of_mem_nhds (Metric.ball_mem_nhds x hε_pos)] with y hy hy'
+        rw [abs_div]
+        exact div_le_of_le_mul₀ (abs_nonneg _) (by positivity) (hε y hy')
       exact hC_lt.not_ge <| le_of_tendsto h_lim h_lim_le;
-    refine' le_of_not_gt fun h => _;
-    -- By definition of infimum, if the infimum is less than |deriv f x|, there exists some C in the set such that C < |deriv f x|.
-    obtain ⟨C, hC⟩ : ∃ C : NNReal, C ∈ {C : NNReal | LipschitzWithAt C f x} ∧ (C : ℝ) < |deriv f x| := by
-      have h_inf : ∀ ε > 0, ∃ C : NNReal, C ∈ {C : NNReal | LipschitzWithAt C f x} ∧ C < lipschitzAt f x + ε := by
-        intro ε ε_pos;
-        exact exists_lt_of_csInf_lt ( show { C : NNReal | LipschitzWithAt C f x }.Nonempty from ⟨ _, h_C_lipschitz ( ⟨ |deriv f x| + 1, by positivity ⟩ : NNReal ) ( by norm_num ) ⟩ ) ( lt_add_of_pos_right _ ε_pos );
-      exact Exists.elim ( h_inf ( ⟨ |deriv f x| - lipschitzAt f x, sub_nonneg.2 h.le ⟩ ) ( sub_pos.2 h ) ) fun C hC => ⟨ C, hC.1, by linarith [ show ( C : ℝ ) < lipschitzAt f x + ( |deriv f x| - lipschitzAt f x ) from mod_cast hC.2 ] ⟩;
-    aesop
+    refine' le_of_not_gt fun h ↦ _;
+    -- By definition of infimum, if the infimum is less than |deriv f x|, there exists some C in the
+    -- set such that C < |deriv f x|.
+    obtain ⟨C, hC₁, hC₂⟩ : ∃ C : ℝ≥0, LipschitzWithAt C f x ∧ C < |deriv f x| := by
+      have h_inf : ∀ ε > 0, ∃ C : ℝ≥0, LipschitzWithAt C f x ∧ C < lipschitzAt f x + ε := by
+        intro ε ε_pos
+        exact exists_lt_of_csInf_lt (show {C : ℝ≥0 | LipschitzWithAt C f x}.Nonempty from
+          ⟨_, h_C_lipschitz (⟨|deriv f x| + 1, by positivity⟩ : ℝ≥0) (by norm_num)⟩)
+            (lt_add_of_pos_right _ ε_pos)
+      obtain ⟨C, hC⟩ := h_inf (⟨|deriv f x| - lipschitzAt f x, sub_nonneg.2 h.le⟩) (sub_pos.2 h)
+      use C, hC.1
+      linarith [show C < lipschitzAt f x + (|deriv f x| - lipschitzAt f x) from mod_cast hC.2]
+    tauto
 
-theorem _root_.abs_isLipschitzAt (x : ℝ) : LipschitzAt abs x := by
-  -- The absolute value function is Lipschitz with constant 1, so we can choose C = 1.
-  use 1;
-  simp [ edist_dist ];
-  -- The absolute value function is continuous, so we can bound the distances by considering the values of $|z|$ and $|x|$.
-  have h_cont : ∀ z : ℝ, abs (abs z - abs x) ≤ abs (z - x) := by
-    exact fun z => abs_abs_sub_abs_le_abs_sub z x;
-  refine Filter.Eventually.of_forall fun z => by simpa [ Real.dist_eq ] using h_cont z
+theorem _root_.LipschitzWithAt_one_abs {x : ℝ} : LipschitzWithAt 1 abs x := by
+  simp [LipschitzWithAt, edist_dist, Real.dist_eq]
+  exact Filter.Eventually.of_forall (abs_abs_sub_abs_le_abs_sub · x)
 
 @[simp]
-theorem _root_.abs_lipschitzAt (x : ℝ) : lipschitzAt abs x = 1 := by
-  refine' le_antisymm _ _;
-  · refine' csInf_le _ _;
-    · exact ⟨ 0, fun C hC => NNReal.coe_nonneg _ ⟩;
-    · -- We need to show that 1 is a Lipschitz constant for the absolute value function at any point x.
-      simp [LipschitzWithAt];
-      norm_num [ edist_dist ];
-      exact Filter.Eventually.of_forall fun z => (abs_abs_sub_abs_le_abs_sub z x);
-  · refine' le_csInf _ _ <;> norm_num;
-    · use 1
-      simp only [LipschitzWithAt, Set.mem_setOf_eq, ENNReal.coe_one, one_mul,
-        edist_dist, dist_nonneg, ENNReal.ofReal_le_ofReal_iff];
-      exact Filter.Eventually.of_forall fun z => ( by simpa [ Real.dist_eq ] using abs_abs_sub_abs_le_abs_sub z x);
-    · intro b a
-      -- By definition of Lipschitz continuity at a point, we have that for all $z$ near $x$, $|abs(z) - abs(x)| \leq b * |z - x|$.
-      have h_lip : ∀ᶠ z in nhds x, |abs z - abs x| ≤ b * |z - x| := by
-        convert a using 1;
-        -- The Lipschitz condition with constant b at x for the absolute value function is exactly the statement that for all z near x, | |z| - |x| | ≤ b * |z - x|.
-        simp [LipschitzWithAt];
-        simp [EDist.edist];
-        simp ( config := { decide := Bool.true } ) [ PseudoMetricSpace.edist_dist, ENNReal.ofReal ];
-        norm_num [ ← ENNReal.coe_le_coe, Real.dist_eq ];
-        norm_cast;
-      contrapose! h_lip;
-      rw [ Metric.eventually_nhds_iff ];
-      field_simp;
-      intro ε ε_pos;
-      cases' lt_or_ge 0 x with hx hx;
-      -- Choose $x_1 = x ± \frac{\epsilon}{2}$
-      · use x + ε / 2;
-        norm_num [ abs_of_pos, hx, ε_pos ];
-        rw [ abs_of_nonneg ] <;> cases abs_cases ( x + ε / 2 ) <;> nlinarith [ show ( b : ℝ ) < 1 from h_lip ];
-      · use x - ε / 2;
-        simp;
-        exact ⟨ by linarith [ abs_of_pos ε_pos ], by cases abs_cases ( x - ε / 2 ) <;> cases abs_cases x <;> cases abs_cases ( |x - ε / 2| - |x| ) <;> nlinarith [ abs_of_pos (half_pos ε_pos) , show ( b : ℝ ) < 1 from h_lip ] ⟩
+theorem _root_.abs_lipschitzAt {x : ℝ} : lipschitzAt abs x = 1 := by
+  apply le_antisymm
+  · exact csInf_le (OrderBot.bddBelow _) LipschitzWithAt_one_abs
+  · apply le_csInf LipschitzWithAt_one_abs.lipschitzAt
+    intro b hb
+    have h_lip : ∀ᶠ z in 𝓝 x, |abs z - abs x| ≤ b * |z - x| := by
+      convert hb using 1
+      simp [EDist.edist, PseudoMetricSpace.edist_dist, ENNReal.ofReal, Real.dist_eq]
+      norm_cast
+    contrapose! h_lip
+    field_simp [Metric.eventually_nhds_iff]
+    intro ε ε_pos
+    rcases lt_or_ge 0 x with hx | hx
+    -- Choose y = x ± ε/2
+    · use x + ε / 2
+      norm_num [abs_of_pos, hx, ε_pos]
+      rw [abs_of_nonneg]
+      <;> cases abs_cases (x + ε / 2)
+      <;> nlinarith [show (b : ℝ) < 1 from h_lip]
+    · use x - ε / 2
+      simp
+      use by linarith [abs_of_pos ε_pos]
+      cases abs_cases (x - ε / 2)
+      <;> cases abs_cases x
+      <;> cases abs_cases (|x - ε / 2| - |x|)
+      <;> nlinarith [abs_of_pos (half_pos ε_pos), show (b : ℝ) < 1 from h_lip]
 
 end lipschitzAt
 
@@ -649,7 +623,7 @@ theorem map_differentiable (f : ℝ → ℝ) (x : FOBall) (hf : Differentiable �
 @[simp]
 theorem map_abs (x : FOBall) :
     map abs x = ⟨abs x.mid, x.var⟩ := by
-  simp [map, abs_isLipschitzAt]
+  simp [map, LipschitzWithAt_one_abs.lipschitzAt]
 
 noncomputable scoped instance : FunLike (ℝ → ℝ) FOBall FOBall where
   coe f := FOBall.map f
@@ -691,7 +665,7 @@ theorem isApprox_iff (x y : FOBall) : x ≈ y ↔
       (|x.mid - y.mid|^2 - x.var - y.var)^2 ≤ 4 * x.var * y.var) ∧
       (y.var ≤ 16 * x.var ∧ x.var ≤ 16 * y.var) := by
   rw [isApprox_def, and_congr_left_iff]
-  intro h; clear h
+  intro _
   congr!
   constructor
   · intro h
@@ -701,33 +675,28 @@ theorem isApprox_iff (x y : FOBall) : x ≈ y ↔
     rcases x with ⟨xm, xv⟩
     rcases y with ⟨ym, yv⟩
     dsimp at h h₂ ⊢
-    -- Since $|xm - ym| \leq \sqrt{xv} + \sqrt{yv}$, squaring both sides gives $|xm - ym|^2 \leq (\sqrt{xv} + \sqrt{yv})^2$.
-    have h_sq : |xm - ym|^2 ≤ (Real.sqrt xv + Real.sqrt yv)^2 := by
-      gcongr;
+    -- Since $|xm - ym| ≤ √xv + √yv, squaring both sides gives |xm - ym|^2 ≤ (√xv + √yv)^2.
+    have h_sq : |xm - ym|^2 ≤ (√xv + √yv)^2 := by gcongr
     -- If $|xm - ym|^2 > xv + yv$, then $|xm - ym|^2 - xv - yv \leq 2\sqrt{xv yv}$.
-    have h_diff : |xm - ym|^2 - xv - yv ≤ 2 * Real.sqrt (xv * yv) := by
-      rw [ Real.sqrt_mul ] <;> nlinarith [ Real.mul_self_sqrt ( show 0 ≤ ( xv : ℝ ) by positivity ), Real.mul_self_sqrt ( show 0 ≤ ( yv : ℝ ) by positivity ) ];
+    have h_diff : |xm - ym|^2 - xv - yv ≤ 2 * √(xv * yv) := by
+      rw [Real.sqrt_mul xv.zero_le_coe]
+      nlinarith [Real.mul_self_sqrt xv.zero_le_coe, Real.mul_self_sqrt yv.zero_le_coe]
     -- Squaring both sides of $|xm - ym|^2 - xv - yv \leq 2\sqrt{xv yv}$, we get $(|xm - ym|^2 - xv - yv)^2 \leq 4xv yv$.
-    have h_diff_sq : (|xm - ym|^2 - xv - yv)^2 ≤ (2 * Real.sqrt (xv * yv))^2 := by
-      exact pow_le_pow_left₀ ( by linarith ) h_diff 2;
-    exact Or.inr ( le_trans h_diff_sq ( by nlinarith only [ Real.mul_self_sqrt ( mul_nonneg ( NNReal.coe_nonneg xv ) ( NNReal.coe_nonneg yv ) ) ] ) )
-  · intro h
-    rcases x with ⟨xm, xv⟩
+    have h_diff_sq := pow_le_pow_left₀ (by linarith) h_diff 2
+    refine .inr (h_diff_sq.trans ?_)
+    nlinarith only [Real.mul_self_sqrt (mul_nonneg xv.coe_nonneg yv.coe_nonneg)]
+  · rcases x with ⟨xm, xv⟩
     rcases y with ⟨ym, yv⟩
-    dsimp at h ⊢
-    -- Let's split into the two cases from h.
-    cases' h with h_case1 h_case2;
-    -- Case 1
-    · nlinarith [ Real.sqrt_nonneg xv, Real.sqrt_nonneg yv, Real.mul_self_sqrt ( show 0 ≤ ( xv : ℝ ) by positivity ), Real.mul_self_sqrt ( show 0 ≤ ( yv : ℝ ) by positivity ) ];
-    -- Case 2
-    · -- Taking the square root of both sides of the inequality from Case 2.
-      have h_sqrt_case2 : |xm - ym|^2 ≤ (xv : ℝ) + (yv : ℝ) + 2 * Real.sqrt ((xv : ℝ) * (yv : ℝ)) := by
-        nlinarith [ Real.sqrt_nonneg ( xv * yv : ℝ ), Real.mul_self_sqrt ( by positivity : 0 ≤ ( xv : ℝ ) * yv ) ];
-      rw [ Real.sqrt_mul ] at h_sqrt_case2;
-      -- Case 1
-      · nlinarith only [ h_sqrt_case2, Real.sqrt_nonneg ( xv : ℝ ), Real.sqrt_nonneg ( yv : ℝ ), Real.mul_self_sqrt ( NNReal.coe_nonneg xv ), Real.mul_self_sqrt ( NNReal.coe_nonneg yv ) ];
-      -- Case 2
-      · positivity
+    dsimp
+    rintro (h_case1 | h_case2)
+    · nlinarith [Real.sqrt_nonneg xv, Real.mul_self_sqrt xv.zero_le_coe,
+        Real.sqrt_nonneg yv, Real.mul_self_sqrt yv.zero_le_coe]
+    · -- Taking the square root of both sides of the inequality
+      have h_sqrt_case2 : |xm - ym|^2 ≤ xv + yv + 2 * Real.sqrt (xv * yv ) := by
+        nlinarith [Real.sqrt_nonneg (xv * yv), Real.mul_self_sqrt (by positivity : 0 ≤ (xv : ℝ) * yv)]
+      rw [Real.sqrt_mul (by positivity)] at h_sqrt_case2
+      nlinarith only [h_sqrt_case2, Real.sqrt_nonneg xv, Real.sqrt_nonneg yv,
+        Real.mul_self_sqrt xv.coe_nonneg, Real.mul_self_sqrt yv.coe_nonneg]
 
 instance : IsRefl FOBall (· ≈ ·) where
   refl x := by simp [← NNReal.coe_le_coe]; linarith [x.var.coe_nonneg]
