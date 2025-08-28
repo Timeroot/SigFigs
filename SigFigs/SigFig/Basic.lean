@@ -336,42 +336,27 @@ noncomputable def ofReal_prec (x : ℝ) (p : ℤ) : SigFig :=
   else ⟨round (x * 10 ^ (p - Int.log 10 |x|) : ℝ), p - Int.log 10 |x|⟩
 
 --We have to mark these as `default_instance` too so that they actually get tried.
-@[default_instance]
-noncomputable instance : HMul SigFig ℝ SigFig where
-  hMul r x := r * ofReal_prec x r.prec
+noncomputable instance : SMul ℝ SigFig where
+  smul x r := r * ofReal_prec x r.prec
 
-/-- We support writing `(x : ℝ) * (r : SigFig)`, but assert that the simp-normal form
-always places exact reals after. So, we have this instance, but `simp` transforms it
-into `r * x`.-/
-@[default_instance]
-noncomputable instance : HMul ℝ SigFig SigFig where
-  hMul x r := r * ofReal_prec x r.prec
-
-@[simp]
-theorem real_hMul : x * r = r * x := by
+theorem hMul_real_def : x • r = r * ofReal_prec x r.prec := by
   rfl
 
-theorem hMul_real_def : r * x = r * ofReal_prec x r.prec := by
-  rfl
-
-theorem mul_zero : r * 0 = ⟨0, r.e + r.prec⟩ := by
+theorem zero_smul : (0 : ℝ) • r = ⟨0, r.e + r.prec⟩ := by
   rcases r with ⟨m, e⟩
   simp [hMul_real_def, ofReal_prec, ofReal, mul_def, toPrec]
 
-theorem zero_mul : 0 * r = ⟨0, r.e + r.prec⟩ := by
-  simp [mul_zero]
+@[simp]
+theorem mul_zero_m : ((0 : ℝ) • r).m = 0 := by
+  simp [zero_smul]
 
 @[simp]
-theorem mul_zero_m : (r * 0).m = 0 := by
-  simp [mul_zero]
-
-@[simp]
-theorem mul_zero_e : (r * 0).e = r.e + r.prec := by
-  simp [mul_zero]
+theorem mul_zero_e : ((0 : ℝ) • r).e = r.e + r.prec := by
+  simp [zero_smul]
 
 --TODO prove
 -- @[simp]
--- theorem mul_one : r * 1 = r := by
+-- theorem mul_one : 1 • r = r := by
 --   rcases r with ⟨m, e⟩
 --   simp [hMul_real_def, mul_def, ofReal_prec]
 --   split_ifs with h₁ h₂
@@ -379,9 +364,6 @@ theorem mul_zero_e : (r * 0).e = r.e + r.prec := by
 --   · simp [h₁, toPrec]
 --   · sorry
 --   · sorry
---
--- theorem one_mul : 1 * r = r := by
---   simp
 
 /-! We don't have `HasDistribNeg`, because:
 ```
