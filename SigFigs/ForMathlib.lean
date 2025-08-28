@@ -17,18 +17,12 @@ theorem Real.max_natPow {x y : ℝ} (hx : 0 ≤ x) (hy : 0 ≤ y) (n : ℕ) :
   · rw [h₁, right_eq_sup]
     exact pow_le_pow_left₀ hx h₂.le n
 
---PR'ed, see #28550
-@[mono]
-theorem Real.sqrt_monotone : Monotone Real.sqrt :=
-  fun _ _ ↦ Real.sqrt_le_sqrt
-
 --PR'ed, see #28416
 instance
     {α : Type u_1} {β : Type u_2} [Preorder α] [Preorder β]
     [TopologicalSpace α] [TopologicalSpace β] [OrderTopology α] [OrderTopology β]
     : ContinuousMapClass (α ≃o β) α β where
   map_continuous := OrderIso.continuous
-
 
 --See https://leanprover.zulipchat.com/#narrow/channel/287929-mathlib4/topic/RingHom.20for.20not-a-ring/with/534826682
 -- for discussion of this
@@ -74,11 +68,6 @@ instance MinimalRingHomClass.toRingHomClass [NonAssocSemiring α] [NonAssocSemir
 end MinimalRingHomClass
 
 namespace MinimalRingHom
-
-/-!
-Throughout this section, some `Semiring` arguments are specified with `{}` instead of `[]`.
-See note [implicit instance arguments].
--/
 
 variable [MinimalRing α] [MinimalRing β]
 

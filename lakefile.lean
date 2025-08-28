@@ -9,7 +9,7 @@ package «SigFigs» where
   -- add any additional package configuration options here
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+  "https://github.com/leanprover-community/mathlib4.git"@"8bb991a4a08f76e3acc412600e834b09ec9d55b4"
 
 @[default_target]
 lean_lib «SigFigs» where

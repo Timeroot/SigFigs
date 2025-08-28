@@ -102,12 +102,12 @@ Without that namespace open, it doesn't coerce:
 -/
 
 /--
-error: type mismatch
+error: Type mismatch
   Real.sqrt
 has type
-  ℝ → ℝ : Type
+  ℝ → ℝ
 but is expected to have type
-  FOBall → FOBall : Type
+  FOBall → FOBall
 -/
 #guard_msgs in
 example : (Real.sqrt : FOBall → FOBall) 3.5 = 1776 := by
