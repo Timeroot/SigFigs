@@ -139,21 +139,18 @@ theorem add_def : r + s =
 instance : AddCommMagma SigFig where
   add_comm r s := by simp [add_def, max_comm r.e s.e, add_comm]
 
---We have to mark these as `default_instance` too so that they actually get tried.
-@[default_instance]
-noncomputable instance : HAdd SigFig ℝ SigFig where
-  hAdd r x := r + ofReal x r.e
+noncomputable def hAdd (r : SigFig) (x : ℝ) : SigFig :=
+  r + ofReal x r.e
 
-/-- We support writing `(x : ℝ) + (r : SigFig)`, but assert that the simp-normal form
-always places exact reals after. So, we have this instance, but `simp` transforms it
-into `r + x`.-/
-@[default_instance]
-noncomputable instance : HAdd ℝ SigFig SigFig where
-  hAdd x r := r + ofReal x r.e
+noncomputable abbrev hAdd' (x : ℝ) (r : SigFig) : SigFig :=
+  ofReal x r.e + r
 
 @[simp]
-theorem real_hAdd : x + r = r + x := by
-  rfl
+theorem hAdd'_eq_hAdd : hAdd' x r = hAdd r x :=
+  add_comm _ _
+
+notation:65 r " + " x:64 => hAdd r x
+notation:65 x " + " r:64 => hAdd' x r
 
 theorem hAdd_real_def : r + x = r + ofReal x r.e := by
   rfl
@@ -163,10 +160,10 @@ theorem hAdd_real_e : (r + x).e = r.e := by
   simp [hAdd_real_def]
 
 @[simp]
-theorem add_zero : r + 0 = r := by
+theorem add_zero : r + (0 : ℝ) = r := by
   simp [hAdd_real_def, SigFig.ext_iff, add_def_m, ofReal_m]
 
-theorem zero_add : 0 + r = r := by
+theorem zero_add : (0 : ℝ) + r = r := by
   simp
 
 end add
@@ -226,19 +223,21 @@ form of putting reals together after, we define it as
 so that `x - r` can be rewritten to `(-r) + x`.
 -/
 
-@[default_instance]
-noncomputable instance : HSub SigFig ℝ SigFig where
-  hSub r x := r + ofReal (-x) r.e
 
-@[default_instance]
-noncomputable instance : HSub ℝ SigFig SigFig where
-  hSub x r := -r + ofReal x r.e
+noncomputable def hSub (r : SigFig) (x : ℝ) : SigFig :=
+  r + ofReal (-x) r.e
 
-theorem hSub_real_def : r - x = r + ofReal (-x) r.e := by
-  rfl
+noncomputable abbrev hSub' (x : ℝ) (r : SigFig) : SigFig :=
+   -r + ofReal x r.e
 
 @[simp]
-theorem real_hSub : x - r = (-r) + x := by
+theorem hSub'_eq_hAdd : hSub' x r = hAdd (-r) x := by
+  rfl
+
+notation:65 r " - " x:64 => hSub r x
+notation:65 x " - " r:64 => hSub' x r
+
+theorem hSub_real_def : r - x = r + ofReal (-x) r.e := by
   rfl
 
 theorem sub_real_eq_add_neg : r - x = r + (-x) := by
@@ -248,11 +247,13 @@ theorem sub_real_eq_add_neg : r - x = r + (-x) := by
 theorem hSub_real_e : (r - x).e = r.e := by
   simp [sub_real_eq_add_neg]
 
-theorem zero_sub : 0 - x = -x := by
+theorem zero_sub : (0 : ℝ) - r = -r := by
   simp
 
-theorem sub_zero : x - 0 = x := by
-  simp
+@[simp]
+theorem sub_zero : r - (0 : ℝ) = r := by
+  rw [hSub, neg_zero]
+  exact add_zero r
 
 /-
 Many other theorems you'd hope hold don't. We don't have
@@ -347,23 +348,14 @@ theorem zero_smul : (0 : ℝ) • r = ⟨0, r.e + r.prec⟩ := by
   simp [hMul_real_def, ofReal_prec, ofReal, mul_def, toPrec]
 
 @[simp]
-theorem mul_zero_m : ((0 : ℝ) • r).m = 0 := by
+theorem zero_smul_m : ((0 : ℝ) • r).m = 0 := by
   simp [zero_smul]
 
 @[simp]
-theorem mul_zero_e : ((0 : ℝ) • r).e = r.e + r.prec := by
+theorem zero_smul_e : ((0 : ℝ) • r).e = r.e + r.prec := by
   simp [zero_smul]
 
---TODO prove
--- @[simp]
--- theorem mul_one : 1 • r = r := by
---   rcases r with ⟨m, e⟩
---   simp [hMul_real_def, mul_def, ofReal_prec]
---   split_ifs with h₁ h₂
---   · norm_num at h₂
---   · simp [h₁, toPrec]
---   · sorry
---   · sorry
+proof_wanted one_smul : (1 : ℝ) • r = r
 
 /-! We don't have `HasDistribNeg`, because:
 ```
