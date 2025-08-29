@@ -149,8 +149,8 @@ noncomputable abbrev hAdd' (x : ℝ) (r : SigFig) : SigFig :=
 theorem hAdd'_eq_hAdd : hAdd' x r = hAdd r x :=
   add_comm _ _
 
-notation:65 r " + " x:64 => hAdd r x
-notation:65 x " + " r:64 => hAdd' x r
+scoped notation:65 r " + " x:64 => hAdd r x
+scoped notation:65 x " + " r:64 => hAdd' x r
 
 theorem hAdd_real_def : r + x = r + ofReal x r.e := by
   rfl
@@ -234,8 +234,8 @@ noncomputable abbrev hSub' (x : ℝ) (r : SigFig) : SigFig :=
 theorem hSub'_eq_hAdd : hSub' x r = hAdd (-r) x := by
   rfl
 
-notation:65 r " - " x:64 => hSub r x
-notation:65 x " - " r:64 => hSub' x r
+scoped notation:65 r " - " x:64 => hSub r x
+scoped notation:65 x " - " r:64 => hSub' x r
 
 theorem hSub_real_def : r - x = r + ofReal (-x) r.e := by
   rfl
@@ -336,7 +336,6 @@ noncomputable def ofReal_prec (x : ℝ) (p : ℤ) : SigFig :=
   if x = 0 then ofReal 0 p
   else ⟨round (x * 10 ^ (p - Int.log 10 |x|) : ℝ), p - Int.log 10 |x|⟩
 
---We have to mark these as `default_instance` too so that they actually get tried.
 noncomputable instance : SMul ℝ SigFig where
   smul x r := r * ofReal_prec x r.prec
 
